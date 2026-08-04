@@ -28,12 +28,14 @@ export async function callClaude(
   }
 
   const data = await res.json()
-  return data.content[0].text as string
+  const text = data?.content?.[0]?.text
+  if (typeof text !== 'string') throw new Error(`Unexpected Anthropic response shape: ${JSON.stringify(data)}`)
+  return text
 }
 
 export async function callClaudeStreaming(
   messages: Message[],
-  systemPrompt = 'You are a helpful HR assistant.',
+  systemPrompt = 'You are a helpful HR assistant for Greenly Cloud Kitchen.',
   onChunk: (text: string) => void
 ): Promise<string> {
   const baseUrl = process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com'
