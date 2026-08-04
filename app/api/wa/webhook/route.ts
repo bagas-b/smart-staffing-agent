@@ -4,6 +4,10 @@ import { createServiceClient } from '@/lib/supabase/server'
 const COMPANY_ID = process.env.COMPANY_ID!
 
 export async function POST(req: NextRequest) {
+  if (!process.env.BAILEYS_SECRET) {
+    return NextResponse.json({ error: 'server misconfiguration' }, { status: 500 })
+  }
+
   const secret = req.headers.get('authorization')?.replace('Bearer ', '')
   if (secret !== process.env.BAILEYS_SECRET) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
@@ -12,12 +16,14 @@ export async function POST(req: NextRequest) {
   const { from, message } = await req.json()
   const supabase = createServiceClient()
 
-  const phone = from.replace('@s.whatsapp.net', '')
+  const cleanPhone = (from as string).replace(/\D/g, '')
+  const cleanJid = `${cleanPhone}@s.whatsapp.net`
+
   const { data: candidate } = await supabase
     .from('candidates')
     .select('id, status')
     .eq('company_id', COMPANY_ID)
-    .or(`wa_chat_id.eq.${from},phone.eq.${phone}`)
+    .or(`wa_chat_id.eq.${cleanJid},phone.eq.${cleanPhone}`)
     .single()
 
   if (!candidate) return NextResponse.json({ ok: true })
@@ -36,6 +42,7 @@ export async function POST(req: NextRequest) {
       .from('candidates')
       .update({ status: 'tertarik', updated_at: new Date().toISOString() })
       .eq('id', candidate.id)
+      .eq('company_id', COMPANY_ID)
 
     await supabase.from('agent_logs').insert({
       company_id: COMPANY_ID,
