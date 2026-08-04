@@ -24,7 +24,7 @@ Format JSON:
     const raw = await callClaude([{ role: 'user', content: prompt }])
     const parsed = JSON.parse(raw.match(/\{[\s\S]+\}/)?.[0] ?? raw)
     return NextResponse.json({ captions: parsed })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
 }

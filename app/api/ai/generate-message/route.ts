@@ -25,7 +25,7 @@ Tulis hanya isi pesannya saja, tanpa penjelasan.`
   try {
     const message = await callClaude([{ role: 'user', content: prompt }])
     return NextResponse.json({ message })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
 }

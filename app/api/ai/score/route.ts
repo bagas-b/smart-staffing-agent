@@ -12,7 +12,7 @@ Outlet: ${outlet ?? '-'}
 Status pipeline: ${status}
 Catatan HR: ${notes ?? '-'}
 Riwayat pesan (${messages?.length ?? 0} pesan): ${
-    messages?.slice(-5).map((m: any) => `[${m.direction}] ${m.content}`).join('\n') ?? '-'
+    messages?.slice(-5).map((m: { direction: string; content: string }) => `[${m.direction}] ${m.content}`).join('\n') ?? '-'
   }
 
 Berikan:
@@ -26,7 +26,7 @@ Format respons JSON:
     const raw = await callClaude([{ role: 'user', content: prompt }])
     const parsed = JSON.parse(raw.match(/\{[\s\S]+\}/)?.[0] ?? raw)
     return NextResponse.json(parsed)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
 }
