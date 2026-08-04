@@ -19,7 +19,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const supabase = createServiceClient()
   const body = await req.json()
-  const { name, phone, position, outlet, notes, source = 'manual' } = body
+  const { name, phone, position, outlet, notes, source = 'import' } = body
   if (!name) return NextResponse.json({ error: 'name required' }, { status: 400 })
 
   const { data, error } = await supabase
