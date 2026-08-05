@@ -271,7 +271,7 @@ smart-staffing-agent/
 │   │   ├── jobs/
 │   │   ├── messages/
 │   │   └── onboarding/
-│   ├── jobs/                   # public job portal (Phase 2 skeleton)
+│   ├── careers/                # public job portal (Phase 2 skeleton, /careers bukan /jobs karena conflict dengan dashboard route)
 │   └── api/
 │       ├── candidates/
 │       ├── jobs/
@@ -282,11 +282,14 @@ smart-staffing-agent/
 │       │   ├── generate-message/
 │       │   ├── generate-caption/
 │       │   └── score/
+│       ├── agent/
+│       │   └── run/            # task queue processor (Section 8)
 │       └── gmail/              # Phase 2 skeleton
 ├── components/
 │   ├── ui/                     # shadcn/ui components
 │   ├── candidates/
 │   ├── jobs/
+│   ├── outcomes/
 │   └── dashboard/
 ├── lib/
 │   ├── supabase/
@@ -308,7 +311,7 @@ Tapi automation ≠ smart. Agar agent ini benar-benar layak disebut "smart staff
 
 Roadmap di bawah ini disusun berdasarkan dependency teknis (apa yang harus ada duluan sebelum yang lain bisa dibangun), bukan berdasarkan waktu pengerjaan.
 
-### 7.1 Fondasi — Outcome Tracking
+### 7.1 Fondasi — Outcome Tracking ✅ Implemented
 
 Tanpa ini, tidak ada cara untuk tahu apakah agent-nya actually bekerja dengan baik atau cuma sibuk kirim pesan tanpa hasil.
 
@@ -346,15 +349,16 @@ candidate_scores (
 
 Ini murni tabel baru — tidak menyentuh skema `candidates`, `candidate_messages`, atau service Baileys yang sudah berjalan.
 
-### 7.2 Scoring Engine — Decision Support, Bukan Keputusan Final
+### 7.2 Scoring Engine — Decision Support, Bukan Keputusan Final ✅ Implemented
 
-**Endpoint baru:**
+**Endpoint:**
 ```
 POST /api/ai/score
 Body: { candidate_id, job_posting_id }
 Response: {
   cv_fit_score, attrition_risk_score, hire_success_probability,
-  reasoning: { strengths[], concerns[], recommendation }
+  reasoning: { strengths[], concerns[], recommendation },
+  cached: boolean
 }
 ```
 
@@ -378,7 +382,7 @@ Lokasi hanya dihitung sekali (di dalam `cv_fit_score`), tidak dihitung ulang di 
 - **Skor ini tidak pernah dipakai untuk auto-reject atau auto-skip kandidat dari pipeline.** Fungsinya murni sebagai catatan/flag yang ditampilkan ke HR ("perlu ditanyakan saat interview"), bukan filter otomatis.
 - Semua scoring diposisikan sebagai **decision support** — HR yang membuat keputusan akhir. LLM membaca CV blue-collar yang sering minim detail/tidak terstruktur, jadi akurasinya terbatas; dokumen produk & UI harus eksplisit menyebut ini sebagai bantuan pertimbangan, bukan penentu otomatis.
 
-### 7.3 Smart Sequencing
+### 7.3 Smart Sequencing ✅ Implemented
 
 Setelah scoring stabil, kandidat dikelompokkan jadi tier rekomendasi (bukan filter keras):
 
@@ -388,7 +392,7 @@ Setelah scoring stabil, kandidat dikelompokkan jadi tier rekomendasi (bukan filt
 
 HR tetap bisa override rekomendasi ini kapan saja (manual select siapa yang mau diinvite, di luar urutan tier).
 
-### 7.4 Outcome Dashboard
+### 7.4 Outcome Dashboard ✅ Implemented
 
 Menjawab pertanyaan yang sebenarnya penting buat HR: bukan "berapa pesan terkirim," tapi "dari yang di-hire, berapa yang stay dan perform."
 
@@ -407,6 +411,110 @@ Dua hal ini baru masuk akal setelah agent sudah dipakai cukup lama dan ada cukup
 - **Daily digest:** ringkasan actionable harian ke HR (siapa siap interview hari ini, siapa mulai kerja hari ini, siapa yang berisiko resign minggu ini, insight mingguan) — bentuk paling ringkas dari "smart" ini terasa: HR tidak perlu buka dashboard, cukup baca satu ringkasan dan tahu harus ngapain hari itu
 
 Membangun dua ini lebih awal, sebelum ada data hire yang cukup, tidak akan menghasilkan insight yang berguna — jadi urutannya memang harus setelah 7.1–7.4 berjalan dan mengumpulkan data nyata.
+
+---
+
+## 8. Agent Design — Orchestration, Autonomy, dan Reasoning
+
+Section 1-7 mendefinisikan *apa* yang perlu ada (data, fitur, metrik). Section ini mendefinisikan *bagaimana agent-nya benar-benar bernalar dan bertindak* — bagian yang sebelumnya tidak ada di spec ini sama sekali. Tanpa ini, `/api/ai/*` cuma kumpulan fungsi AI yang dipanggil manual, bukan agent.
+
+### 8.1 Prinsip Dasar
+
+- **Agent yang mengambil keputusan & mengeksekusi** (baca data → nilai → putuskan langkah → bertindak), bukan cuma dipanggil satu kali lalu selesai.
+- **Manusia mengontrol titik kritis** — pesan tidak pernah terkirim ke kandidat tanpa approval HR. Ini non-negotiable, sudah ditetapkan sejak awal project.
+- **Semua keputusan agent harus bisa dijelaskan** (reasoning eksplisit), bukan black box — konsisten dengan prinsip observability yang sudah dibahas di awal project.
+
+### 8.2 Trigger — Kapan Agent Bertindak
+
+Agent tidak berjalan terus-menerus (tidak ada infra buat itu di stack serverless ini). Agent bertindak berdasarkan tiga jenis trigger:
+
+| Trigger | Sumber | Aksi agent |
+|---|---|---|
+| **Event: kandidat baru masuk** | CSV/Excel upload selesai diproses | Scoring (`cv_fit_score`, `attrition_risk_score`) untuk tiap kandidat baru |
+| **Event: balasan WA masuk** | Webhook `/api/wa/webhook` dari Baileys | Klasifikasi balasan → update status kandidat → (kalau perlu) siapkan draft follow-up |
+| **Scheduled: cek follow-up** | Vercel Cron, jalan tiap beberapa jam | Cari kandidat berstatus `menunggu_balasan` yang sudah lewat waktu tertentu tanpa respons → siapkan draft follow-up (masuk antrean approval, bukan langsung kirim) |
+
+### 8.3 Task Queue — Supaya Agent Punya "Alur Kerja", Bukan Sekadar Function Call
+
+Tambahan tabel baru supaya tindakan agent tercatat sebagai unit kerja yang bisa di-retry dan diaudit, bukan cuma request/response sesaat:
+
+```sql
+agent_tasks (
+  id, company_id, candidate_id,
+  type: score | classify_reply | draft_message | draft_follow_up,
+  status: pending | processing | done | failed | needs_review,
+  payload jsonb,        -- input untuk task ini
+  result jsonb,         -- output dari LLM, nullable sampai selesai
+  error_message,        -- nullable, diisi kalau failed
+  attempts int default 0,
+  created_at, processed_at
+)
+```
+
+Alur: event terjadi → task di-enqueue ke `agent_tasks` → endpoint `/api/agent/run` memproses task pending (dipanggil langsung setelah enqueue untuk near-real-time, dan juga dipanggil oleh Vercel Cron sebagai fallback kalau ada yang gagal/tertunda) → hasil disimpan, status task jadi `done`/`failed`/`needs_review`.
+
+**Tambahan field di tabel `candidates` yang sudah ada** (additive, tidak mengubah struktur existing):
+```sql
+ALTER TABLE candidates ADD COLUMN follow_up_count int DEFAULT 0;
+ALTER TABLE candidates ADD COLUMN next_follow_up_at timestamptz;
+ALTER TABLE candidates ADD COLUMN last_agent_action text;
+```
+
+### 8.4 Autonomy Boundary — Apa yang Otomatis vs Wajib Approval
+
+| Aksi | Otonomi |
+|---|---|
+| Scoring kandidat baru | **Otomatis**, tanpa approval — ini analisis, bukan tindakan ke luar |
+| Klasifikasi balasan WA | **Otomatis** — update status kandidat langsung berdasarkan hasil klasifikasi |
+| Draft pesan (outreach maupun follow-up) | **Otomatis dibuat**, tapi **masuk antrean approval** — tidak pernah langsung terkirim |
+| Kirim pesan ke kandidat | **Wajib approval HR**, tanpa terkecuali |
+| Menandai kandidat "Tier 3 / perlu review" | **Otomatis** sebagai flag, **tidak pernah** otomatis me-reject atau menghapus dari pipeline |
+| Follow-up ke-2 dst | **Otomatis dibuat draft-nya**, tapi dibatasi maksimum (mis. 2x follow-up) sebelum agent berhenti & serahkan ke HR sepenuhnya |
+
+### 8.5 Prompt Spec — Scoring
+
+**System prompt (ringkas, prinsip):**
+- Diminta membaca CV/data kandidat + kriteria job posting
+- Diminta mengeluarkan **JSON terstruktur saja**, sesuai schema yang sudah ditetapkan di Section 7.2 (`cv_fit_score`, breakdown per kriteria, `reasoning.strengths[]`, `reasoning.concerns[]`, `reasoning.recommendation`)
+- **Instruksi eksplisit dilarang**: tidak boleh menyertakan penalti berbasis pola "sering ganti kerja" ke dalam `attrition_risk_score` — sesuai batasan yang sudah ditetapkan di Section 7.2, untuk mencegah bias sistemik
+- Diminta memberi `confidence` (high/medium/low) atas skor yang dihasilkan — kalau CV terlalu minim data, confidence rendah, dan hasil otomatis ditandai `needs_review` alih-alih dipakai langsung untuk tiering
+
+### 8.6 Prompt Spec — Klasifikasi Balasan WA
+
+**Kategori output (fixed set, bukan open-ended):**
+```
+tertarik | tidak_tertarik | butuh_info | tidak_jelas
+```
+- Kalau hasil klasifikasi `tidak_jelas` atau confidence rendah → **jangan auto-update status**, tandai task sebagai `needs_review` supaya HR yang baca balasannya langsung dan putuskan manual
+- Kalau `butuh_info` → agent boleh siapkan draft balasan (bukan kirim langsung) yang menjawab pertanyaan umum (jadwal, lokasi, gaji) berdasarkan data job posting
+
+### 8.7 Failure Handling
+
+| Kegagalan | Penanganan |
+|---|---|
+| LLM tidak mengembalikan JSON valid | Retry sekali dengan instruksi lebih ketat; kalau gagal lagi → task `failed`, log ke `agent_logs` type `error`, tidak block proses lain |
+| Confidence rendah pada scoring | Task selesai tapi ditandai `needs_review` — kandidat tetap masuk pipeline, tidak diberi tier otomatis |
+| Klasifikasi balasan ambigu | Task `needs_review`, status kandidat tidak berubah sampai HR review manual |
+| Baileys service down (gagal kirim) | Pesan tetap di antrean approval dengan status `gagal_kirim`, agent retry saat service kembali online, HR mendapat notifikasi via `agent_logs` |
+| Follow-up melebihi batas maksimum | Agent berhenti membuat draft follow-up baru untuk kandidat tsb, status ditandai `perlu_tindak_lanjut_manual` |
+
+### 8.8 Contoh Alur End-to-End (menyatukan semuanya)
+
+```
+HR upload CSV 20 kandidat
+   → agent_tasks: 20 task type=score di-enqueue
+   → /api/agent/run proses tiap task → hasil: cv_fit_score, attrition_risk, tier
+   → kandidat dengan confidence rendah ditandai needs_review (tidak dapat tier)
+   → HR buka dashboard, lihat Tier 1/2/3 + kandidat needs_review terpisah
+   → HR pilih siapa yang diinvite (individual/bulk) → draft dibuat agent → masuk antrean approval
+   → HR approve → Baileys kirim
+   → Kandidat balas → webhook masuk → agent klasifikasi
+   → Kalau "butuh info" → agent siapkan draft balasan → antrean approval lagi
+   → Kalau 48 jam tanpa balasan → cron trigger follow-up draft → antrean approval
+   → Setelah 2x follow-up tanpa respons → status "perlu_tindak_lanjut_manual", agent berhenti
+```
+
+Ini yang membuatnya jadi **agent** — bukan cuma endpoint yang nunggu dipanggil, tapi alur yang punya kesadaran state per kandidat, mengambil inisiatif langkah berikutnya sesuai aturan yang sudah ditetapkan, dan tahu kapan harus berhenti dan menyerahkan ke manusia.
 
 ---
 
