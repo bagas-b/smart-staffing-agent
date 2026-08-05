@@ -2,13 +2,14 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Users, Briefcase, MessageSquare, LayoutDashboard, LogOut } from 'lucide-react'
+import { Users, Briefcase, MessageSquare, LayoutDashboard, LogOut, BarChart2 } from 'lucide-react'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/candidates', label: 'Kandidat', icon: Users },
   { href: '/jobs', label: 'Job Posting', icon: Briefcase },
   { href: '/messages', label: 'Pesan', icon: MessageSquare },
+  { href: '/outcomes', label: 'Outcomes', icon: BarChart2 },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
