@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
       cv_fit_score: cached.cv_fit_score,
       attrition_risk_score: cached.attrition_risk_score,
       hire_success_probability: cached.hire_success_probability,
+      confidence: cached.scoring_reasoning?.confidence ?? 'medium',
       reasoning: cached.scoring_reasoning,
       cached: true,
     })
@@ -93,6 +94,11 @@ Berikan penilaian dalam format JSON berikut. PENTING:
     // Formula from spec: hire_success_probability = (cv_fit * 0.6) + ((100 - attrition) * 0.4)
     const hireProbability = Math.round((cvFit * 0.6) + ((100 - attrition) * 0.4))
 
+    const confidence: 'high' | 'medium' | 'low' =
+      cvFit >= 70 && attrition <= 40 ? 'high'
+      : cvFit < 40 || attrition > 70 ? 'low'
+      : 'medium'
+
     // Delete old score, insert new (handles the partial unique index on valid_until > now)
     await supabase
       .from('candidate_scores')
@@ -106,13 +112,14 @@ Berikan penilaian dalam format JSON berikut. PENTING:
       cv_fit_score: cvFit,
       attrition_risk_score: attrition,
       hire_success_probability: hireProbability,
-      scoring_reasoning: parsed.reasoning,
+      scoring_reasoning: { ...parsed.reasoning, confidence },
     })
 
     return NextResponse.json({
       cv_fit_score: cvFit,
       attrition_risk_score: attrition,
       hire_success_probability: hireProbability,
+      confidence,
       reasoning: parsed.reasoning,
       cached: false,
     })
