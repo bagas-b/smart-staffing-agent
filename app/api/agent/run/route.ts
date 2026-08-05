@@ -31,6 +31,8 @@ export async function POST() {
         await processClassifyTask(supabase, task)
       } else if (task.type === 'draft_follow_up') {
         await processDraftFollowUpTask(supabase, task)
+      } else {
+        throw new Error(`unknown task type: ${task.type}`)
       }
       processed++
     } catch (e: unknown) {
