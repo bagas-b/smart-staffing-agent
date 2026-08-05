@@ -300,6 +300,116 @@ smart-staffing-agent/
 
 ---
 
+## 7. Roadmap — Dari Automation Tool ke Smart Staffing Agent Sejati
+
+Phase 1 yang sudah kelar di dev adalah **automation layer** yang solid: upload kandidat, generate pesan personal, kirim WA, klasifikasi balasan otomatis, pipeline kanban. Ini mengurangi kerja manual HR secara signifikan.
+
+Tapi automation ≠ smart. Agar agent ini benar-benar layak disebut "smart staffing agent" — bukan cuma "WA blast tool yang rapi" — dia perlu bisa membantu HR menjawab pertanyaan yang lebih penting dari sekadar "sudah dikirim belum": **siapa yang seharusnya di-hire, dan seberapa besar kemungkinan mereka akan bertahan & perform.**
+
+Roadmap di bawah ini disusun berdasarkan dependency teknis (apa yang harus ada duluan sebelum yang lain bisa dibangun), bukan berdasarkan waktu pengerjaan.
+
+### 7.1 Fondasi — Outcome Tracking
+
+Tanpa ini, tidak ada cara untuk tahu apakah agent-nya actually bekerja dengan baik atau cuma sibuk kirim pesan tanpa hasil.
+
+```sql
+-- Hire tracking
+candidate_hire_records (
+  id, candidate_id, company_id,
+  job_posting_id → job_postings,
+  hired_date, start_date,
+  first_day_attended: boolean,
+  notes, created_at
+)
+
+-- Performance & retention tracking
+candidate_performance (
+  id, candidate_hire_id → candidate_hire_records, company_id,
+  day_1_checkin: boolean,
+  day_7_status: active | no_show | absent,
+  day_30_status: active | resigned | terminated,
+  performance_rating: 1-5,
+  resign_date, resign_reason,
+  mentor_feedback, updated_at
+)
+
+-- Scoring cache
+candidate_scores (
+  id, candidate_id, company_id,
+  cv_fit_score: 0-100,
+  attrition_risk_score: 0-100,
+  hire_success_probability: 0-100,
+  scoring_reasoning: jsonb,
+  scored_at, valid_until
+)
+```
+
+Ini murni tabel baru — tidak menyentuh skema `candidates`, `candidate_messages`, atau service Baileys yang sudah berjalan.
+
+### 7.2 Scoring Engine — Decision Support, Bukan Keputusan Final
+
+**Endpoint baru:**
+```
+POST /api/ai/score
+Body: { candidate_id, job_posting_id }
+Response: {
+  cv_fit_score, attrition_risk_score, hire_success_probability,
+  reasoning: { strengths[], concerns[], recommendation }
+}
+```
+
+**Kriteria `cv_fit_score`** (composite, sesuai prioritas yang sudah ditetapkan):
+
+| Kriteria | Bobot |
+|---|---|
+| Pengalaman relevan | 35% |
+| Skill spesifik | 25% |
+| Kelengkapan data / red flag | 20% |
+| Kecocokan lokasi | 20% |
+
+**Formula final:**
+```
+hire_success_probability = (cv_fit_score * 0.6) + ((100 - attrition_risk_score) * 0.4)
+```
+Lokasi hanya dihitung sekali (di dalam `cv_fit_score`), tidak dihitung ulang di formula akhir — menghindari bias skor yang timpang ke satu faktor.
+
+**Batasan penting soal `attrition_risk_score`:**
+- Dihitung dari sinyal minim & aman: gap kerja yang tidak dijelaskan di CV, data kontak tidak lengkap, kelengkapan riwayat — **bukan** dari pola "sering ganti kerja," karena di segmen kerja blue-collar/gig, itu bukan indikator ketidakandalan dan berisiko menghasilkan bias sistemik terhadap kandidat dari latar belakang ekonomi tertentu.
+- **Skor ini tidak pernah dipakai untuk auto-reject atau auto-skip kandidat dari pipeline.** Fungsinya murni sebagai catatan/flag yang ditampilkan ke HR ("perlu ditanyakan saat interview"), bukan filter otomatis.
+- Semua scoring diposisikan sebagai **decision support** — HR yang membuat keputusan akhir. LLM membaca CV blue-collar yang sering minim detail/tidak terstruktur, jadi akurasinya terbatas; dokumen produk & UI harus eksplisit menyebut ini sebagai bantuan pertimbangan, bukan penentu otomatis.
+
+### 7.3 Smart Sequencing
+
+Setelah scoring stabil, kandidat dikelompokkan jadi tier rekomendasi (bukan filter keras):
+
+- **Tier 1 — Prioritize** (hire_success_probability ≥ 80): direkomendasikan diinvite duluan
+- **Tier 2 — Consider** (60–79): direkomendasikan dengan catatan tambahan
+- **Tier 3 — Perlu review manual** (<60): tetap masuk pipeline, ditandai untuk direview HR sebelum diinvite — bukan otomatis di-skip
+
+HR tetap bisa override rekomendasi ini kapan saja (manual select siapa yang mau diinvite, di luar urutan tier).
+
+### 7.4 Outcome Dashboard
+
+Menjawab pertanyaan yang sebenarnya penting buat HR: bukan "berapa pesan terkirim," tapi "dari yang di-hire, berapa yang stay dan perform."
+
+- **Hire funnel:** total outreach → response → interview → hire
+- **Quality metrics:** first-day show rate, 30-day retention rate, rata-rata performance rating
+- **Cost metrics:** cost per hire, cost per successful hire (>30 hari)
+- **Source effectiveness:** platform/sumber kandidat mana yang paling menghasilkan hire yang bertahan
+
+Versi awal cukup input manual dari HR untuk status day-1/day-30 (belum perlu integrasi absensi otomatis) plus query agregasi sederhana — belum butuh visualisasi kompleks.
+
+### 7.5 Setelah Data Historis Cukup — Feedback Loop & Daily Digest
+
+Dua hal ini baru masuk akal setelah agent sudah dipakai cukup lama dan ada cukup data hire nyata untuk dipelajari:
+
+- **Feedback loop:** saat kandidat ditandai resign, sistem membandingkan prediksi awal vs hasil aktual, dan datanya dipakai untuk mengevaluasi/mengkalibrasi ulang bobot scoring dari waktu ke waktu
+- **Daily digest:** ringkasan actionable harian ke HR (siapa siap interview hari ini, siapa mulai kerja hari ini, siapa yang berisiko resign minggu ini, insight mingguan) — bentuk paling ringkas dari "smart" ini terasa: HR tidak perlu buka dashboard, cukup baca satu ringkasan dan tahu harus ngapain hari itu
+
+Membangun dua ini lebih awal, sebelum ada data hire yang cukup, tidak akan menghasilkan insight yang berguna — jadi urutannya memang harus setelah 7.1–7.4 berjalan dan mengumpulkan data nyata.
+
+---
+
 ## Out of Scope (Phase 1)
 
 - Multi-company UI
