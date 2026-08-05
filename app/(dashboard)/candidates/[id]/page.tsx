@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { MessageHistory } from '@/components/candidates/MessageHistory'
 import { Badge } from '@/components/ui/badge'
 import { notFound } from 'next/navigation'
+import { ScoreCard } from '@/components/candidates/ScoreCard'
 
 const STATUS_LABELS: Record<string, string> = {
   belum_dihubungi: 'Belum Dihubungi',
@@ -54,6 +55,8 @@ export default async function CandidateDetailPage({ params }: { params: Promise<
         {candidate.email && <div><span className="text-gray-500">Email:</span> {candidate.email}</div>}
         {candidate.notes && <div className="col-span-2"><span className="text-gray-500">Catatan:</span> {candidate.notes}</div>}
       </div>
+
+      <ScoreCard candidateId={candidate.id} />
 
       <MessageHistory
         candidateId={candidate.id}
