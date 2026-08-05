@@ -106,7 +106,7 @@ Klasifikasikan sebagai salah satu:
 - tidak_jelas: tidak dapat menentukan maksud kandidat
 
 Jawab HANYA dalam format JSON:
-{"classification": "<kategori>", "confidence": "high|low", "reasoning": "<alasan singkat>"}`
+{"classification": "<kategori>", "confidence": "high" | "medium" | "low", "reasoning": "<alasan singkat>"}`
 
   const raw = await callClaude([{ role: 'user', content: prompt }])
 

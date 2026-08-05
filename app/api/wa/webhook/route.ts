@@ -41,10 +41,13 @@ export async function POST(req: NextRequest) {
   await supabase.from('agent_tasks').insert({
     company_id: COMPANY_ID,
     type: 'classify_reply',
-    payload: { candidate_id: candidate.id, message },
+    payload: { candidate_id: candidate.id, message, from },
     status: 'pending',
     attempts: 0,
   })
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+  fetch(`${baseUrl}/api/agent/run`, { method: 'POST' }).catch(() => {})
 
   return NextResponse.json({ ok: true })
 }

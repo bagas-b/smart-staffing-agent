@@ -37,5 +37,10 @@ export async function GET(req: Request) {
     enqueued.push(candidate.id)
   }
 
+  if (enqueued.length > 0) {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+    await fetch(`${baseUrl}/api/agent/run`, { method: 'POST' })
+  }
+
   return NextResponse.json({ ok: true, enqueued: enqueued.length, ids: enqueued })
 }
