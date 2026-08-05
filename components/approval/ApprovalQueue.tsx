@@ -18,11 +18,16 @@ export function ApprovalQueue({ drafts: initial }: { drafts: Draft[] }) {
 
   async function handleAction(id: string, action: 'approve' | 'reject') {
     setLoading(id)
-    await fetch(`/api/approval/${action}`, {
+    const res = await fetch(`/api/approval/${action}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
+    if (!res.ok) {
+      alert('Gagal memproses permintaan. Coba lagi.')
+      setLoading(null)
+      return
+    }
     setDrafts(d => d.filter(x => x.id !== id))
     setLoading(null)
     router.refresh()
