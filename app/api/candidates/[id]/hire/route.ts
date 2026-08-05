@@ -89,6 +89,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from('candidate_performance')
       .select('id')
       .eq('candidate_hire_id', hire.id)
+      .eq('company_id', COMPANY_ID)
       .single()
 
     if (existingPerf) {
