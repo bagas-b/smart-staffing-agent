@@ -41,12 +41,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Update candidate status to onboarding
-  await supabase
+  // Update candidate status to onboarding (best-effort)
+  const { error: updateError } = await supabase
     .from('candidates')
     .update({ status: 'onboarding', updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('company_id', COMPANY_ID)
+
+  if (updateError) {
+    console.warn('hire record created but candidate status update failed:', updateError.message)
+  }
 
   return NextResponse.json({ hire_record: data }, { status: 201 })
 }
