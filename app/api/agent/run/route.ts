@@ -1,11 +1,16 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { callClaude } from '@/lib/ai/client'
 
 const COMPANY_ID = process.env.COMPANY_ID!
 const MAX_TASKS_PER_RUN = 10
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const authHeader = req.headers.get('authorization')
+  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
+
   const supabase = createServiceClient()
 
   const { data: tasks } = await supabase
@@ -137,6 +142,44 @@ Jawab HANYA dalam format JSON:
     .eq('id', candidate_id)
     .eq('company_id', COMPANY_ID)
 
+  if (parsed.classification === 'butuh_info') {
+    // Fetch job info for context
+    const { data: candidate } = await supabase
+      .from('candidates')
+      .select('name, position, outlet')
+      .eq('id', candidate_id)
+      .eq('company_id', COMPANY_ID)
+      .single()
+
+    const { data: job } = await supabase
+      .from('job_postings')
+      .select('title, salary_range, description')
+      .eq('company_id', COMPANY_ID)
+      .eq('position', candidate?.position ?? '')
+      .limit(1)
+      .single()
+
+    const infoPrompt = `Tulis pesan balasan WhatsApp singkat (maks 3 kalimat) untuk kandidat yang meminta info lebih lanjut tentang posisi kerja.
+
+Kandidat: ${candidate?.name ?? 'Kandidat'}
+Posisi: ${candidate?.position ?? '-'}
+Outlet: ${candidate?.outlet ?? '-'}
+${job ? `Gaji: ${job.salary_range ?? 'kompetitif'}\nDeskripsi singkat: ${(job.description ?? '').slice(0, 200)}` : ''}
+
+Buat pesan yang ramah, informatif, dalam Bahasa Indonesia. Kembalikan hanya teks pesan.`
+
+    const draftText = await callClaude([{ role: 'user', content: infoPrompt }])
+
+    await supabase.from('candidate_messages').insert({
+      candidate_id,
+      company_id: COMPANY_ID,
+      direction: 'draft',
+      channel: 'wa',
+      content: draftText.trim(),
+      sent_by: 'agent',
+    })
+  }
+
   await supabase.from('agent_tasks').update({
     status: 'done',
     result: parsed,
@@ -160,7 +203,7 @@ async function processDraftFollowUpTask(
 
   const { data: candidate } = await supabase
     .from('candidates')
-    .select('id, full_name, follow_up_count')
+    .select('id, name, follow_up_count, position, outlet')
     .eq('id', candidate_id)
     .eq('company_id', COMPANY_ID)
     .single()
@@ -181,7 +224,7 @@ async function processDraftFollowUpTask(
   }
 
   const prompt = `Kamu adalah asisten HR untuk Greenly Cloud Kitchen.
-Tulis pesan follow-up WhatsApp singkat (2-3 kalimat) untuk kandidat bernama ${candidate.full_name ?? 'kandidat'} yang belum membalas pesan sebelumnya.
+Tulis pesan follow-up WhatsApp singkat (2-3 kalimat) untuk kandidat bernama ${candidate.name ?? 'kandidat'} yang belum membalas pesan sebelumnya.
 Nada: ramah, profesional, tidak memaksa.
 Tulis langsung isi pesannya saja, tanpa label atau penjelasan tambahan.`
 

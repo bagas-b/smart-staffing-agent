@@ -64,7 +64,10 @@ export async function POST(req: NextRequest) {
       }))
     )
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-    fetch(`${baseUrl}/api/agent/run`, { method: 'POST' }).catch(() => {})
+    fetch(`${baseUrl}/api/agent/run`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` },
+    }).catch(() => {})
   }
 
   return NextResponse.json({ imported, failed: rows.length - imported, batchId: batch.id })

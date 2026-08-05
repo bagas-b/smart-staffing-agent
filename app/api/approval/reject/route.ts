@@ -1,10 +1,14 @@
 import { NextResponse, NextRequest } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export async function POST(req: NextRequest) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
   const { id } = await req.json()
-  const supabase = createServiceClient()
-  const { error } = await supabase
+  const serviceSupabase = createServiceClient()
+  const { error } = await serviceSupabase
     .from('candidate_messages')
     .delete()
     .eq('id', id)

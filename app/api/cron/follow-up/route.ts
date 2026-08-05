@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
 const COMPANY_ID = process.env.COMPANY_ID!
-const FOLLOW_UP_THRESHOLD_HOURS = 24
+const FOLLOW_UP_THRESHOLD_HOURS = 48
 
 export async function GET(req: Request) {
   if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -39,7 +39,10 @@ export async function GET(req: Request) {
 
   if (enqueued.length > 0) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-    await fetch(`${baseUrl}/api/agent/run`, { method: 'POST' })
+    await fetch(`${baseUrl}/api/agent/run`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` },
+    })
   }
 
   return NextResponse.json({ ok: true, enqueued: enqueued.length, ids: enqueued })
