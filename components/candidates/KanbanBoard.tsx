@@ -1,6 +1,10 @@
 'use client'
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
+
+interface CandidateScore {
+  hire_success_probability: number
+  scoring_reasoning?: { confidence?: string } | null
+}
 
 interface Candidate {
   id: string
@@ -8,6 +12,7 @@ interface Candidate {
   status: string
   position: string
   outlet: string
+  candidate_scores?: Array<CandidateScore> | null
 }
 
 const PIPELINE = [
@@ -20,23 +25,16 @@ const PIPELINE = [
   { key: 'aktif', label: 'Aktif', color: 'bg-emerald-50' },
 ]
 
-function getTierBadge(prob: number): { label: string; bg: string } {
-  if (prob >= 80) return { label: 'T1', bg: 'bg-green-200 text-green-800' }
-  if (prob >= 60) return { label: 'T2', bg: 'bg-yellow-200 text-yellow-800' }
-  return { label: 'T3', bg: 'bg-gray-200 text-gray-600' }
+function TierBadge({ score }: { score: CandidateScore | undefined | null }) {
+  if (!score) return null
+  const prob = score.hire_success_probability
+  const lowConf = score.scoring_reasoning?.confidence === 'low'
+  if (prob >= 70 && !lowConf) return <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-800">Prioritas</span>
+  if (prob >= 40 && !lowConf) return <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800">Pertimbangkan</span>
+  return <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-800">Perlu Review</span>
 }
 
 export function KanbanBoard({ candidates }: { candidates: Candidate[] }) {
-  const [scoreMap, setScoreMap] = useState<Record<string, number>>({})
-  useEffect(() => {
-    fetch('/api/candidates/scores')
-      .then(r => r.json())
-      .then(data => {
-        if (typeof data === 'object' && !Array.isArray(data)) setScoreMap(data)
-      })
-      .catch(() => {})
-  }, [])
-
   return (
     <div className="flex gap-4 overflow-x-auto pb-4">
       {PIPELINE.map(col => {
@@ -54,10 +52,9 @@ export function KanbanBoard({ candidates }: { candidates: Candidate[] }) {
                     <p className="font-medium text-gray-800 truncate">{c.name}</p>
                     {c.position && <p className="text-gray-500">{c.position}</p>}
                     {c.outlet && <p className="text-gray-400">{c.outlet}</p>}
-                    {scoreMap[c.id] !== undefined && (() => {
-                      const t = getTierBadge(scoreMap[c.id])
-                      return <span className={`mt-1 text-xs px-1 rounded font-medium inline-block ${t.bg}`}>{t.label}</span>
-                    })()}
+                    <div className="mt-1">
+                      <TierBadge score={c.candidate_scores?.[0]} />
+                    </div>
                   </div>
                 </Link>
               ))}

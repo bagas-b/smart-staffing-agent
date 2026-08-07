@@ -37,20 +37,20 @@ export async function POST(req: NextRequest) {
     sent_by: from,
   })
 
-  if (candidate.status === 'menunggu_balasan') {
-    await supabase
-      .from('candidates')
-      .update({ status: 'tertarik', updated_at: new Date().toISOString() })
-      .eq('id', candidate.id)
-      .eq('company_id', COMPANY_ID)
+  // Enqueue classification task regardless of current status
+  await supabase.from('agent_tasks').insert({
+    company_id: COMPANY_ID,
+    type: 'classify_reply',
+    payload: { candidate_id: candidate.id, message, from },
+    status: 'pending',
+    attempts: 0,
+  })
 
-    await supabase.from('agent_logs').insert({
-      company_id: COMPANY_ID,
-      type: 'info',
-      message: `Balasan masuk dari kandidat — status diupdate ke Tertarik`,
-      metadata: { candidateId: candidate.id, from },
-    })
-  }
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+  fetch(`${baseUrl}/api/agent/run`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` },
+  }).catch(() => {})
 
   return NextResponse.json({ ok: true })
 }

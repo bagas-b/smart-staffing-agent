@@ -31,25 +31,44 @@ export async function POST(req: NextRequest) {
   if (batchError) return NextResponse.json({ error: batchError.message }, { status: 500 })
 
   let imported = 0
+  const importedIds: string[] = []
   for (const row of rows) {
     const name = pick(row, 'name', 'nama', 'Name', 'Nama')
     const phone = pick(row, 'phone', 'nomor', 'wa', 'Phone', 'Nomor', 'WA')
     const position = pick(row, 'position', 'posisi', 'Position', 'Posisi')
     const outlet = pick(row, 'outlet', 'Outlet')
     if (!name) continue
-    const { error } = await supabase.from('candidates').insert({
+    const { data: inserted, error } = await supabase.from('candidates').insert({
       company_id: COMPANY_ID,
       name, phone, position, outlet,
       source: 'import',
       import_batch_id: batch.id,
-    })
-    if (!error) imported++
+    }).select('id').single()
+    if (!error && inserted) {
+      imported++
+      importedIds.push(inserted.id)
+    }
   }
 
   await supabase
     .from('candidate_imports')
     .update({ success_rows: imported })
     .eq('id', batch.id)
+
+  if (importedIds.length > 0) {
+    await supabase.from('agent_tasks').insert(
+      importedIds.map(candidate_id => ({
+        company_id: COMPANY_ID,
+        type: 'score',
+        payload: { candidate_id },
+      }))
+    )
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+    fetch(`${baseUrl}/api/agent/run`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` },
+    }).catch(() => {})
+  }
 
   return NextResponse.json({ imported, failed: rows.length - imported, batchId: batch.id })
 }
