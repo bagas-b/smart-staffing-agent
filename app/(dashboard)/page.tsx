@@ -5,6 +5,11 @@ import { ActionPanel } from '@/components/dashboard/ActionPanel'
 import { RecommendationPanel } from '@/components/dashboard/RecommendationPanel'
 import { Users, Clock, AlertTriangle, CheckSquare, TrendingUp, Activity } from 'lucide-react'
 
+// Force per-request rendering — this page has no dynamic API usage Next.js can
+// detect (createServiceClient() doesn't touch cookies()/headers()), so without
+// this it gets statically prerendered at build time and never reflects DB changes.
+export const dynamic = 'force-dynamic'
+
 async function getDashboardData() {
   const supabase = createServiceClient()
   const companyId = process.env.COMPANY_ID!

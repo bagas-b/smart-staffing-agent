@@ -330,7 +330,7 @@ export function JobModal({ jobId, creating = false, onClose, onChanged, snapshot
       {/* Nested candidate modal — layered above the job modal */}
       <CandidateModal
         candidateId={selectedCandidateId}
-        onClose={() => setSelectedCandidateId(null)}
+        onClose={() => { setSelectedCandidateId(null); refetch() }}
         snapshot={selectedApplicant ? {
           name: selectedApplicant.name,
           status: selectedApplicant.status,

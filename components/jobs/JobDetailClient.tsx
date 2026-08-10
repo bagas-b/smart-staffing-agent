@@ -220,7 +220,7 @@ export function JobDetailClient({ job, applicants }: { job: JobRecord; applicant
 
       <CandidateModal
         candidateId={selectedCandidateId}
-        onClose={() => setSelectedCandidateId(null)}
+        onClose={() => { setSelectedCandidateId(null); router.refresh() }}
         snapshot={selectedApplicant ? {
           name: selectedApplicant.name,
           status: selectedApplicant.status,

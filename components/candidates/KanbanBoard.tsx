@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { CandidateModal } from './CandidateModal'
 
 interface CandidateScore {
@@ -38,8 +39,16 @@ function TierBadge({ score }: { score: CandidateScore | undefined | null }) {
 }
 
 export function KanbanBoard({ candidates }: { candidates: Candidate[] }) {
+  const router = useRouter()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selectedCandidate = selectedId ? candidates.find(c => c.id === selectedId) : null
+
+  // Re-fetch server data on close — the modal can change candidate status
+  // (hire, scoring, message-driven classification) that the board must reflect.
+  function closeModal() {
+    setSelectedId(null)
+    router.refresh()
+  }
 
   return (
     <>
@@ -92,7 +101,7 @@ export function KanbanBoard({ candidates }: { candidates: Candidate[] }) {
       {/* Modal */}
       <CandidateModal
         candidateId={selectedId}
-        onClose={() => setSelectedId(null)}
+        onClose={closeModal}
         snapshot={selectedCandidate ? {
           name: selectedCandidate.name,
           status: selectedCandidate.status,

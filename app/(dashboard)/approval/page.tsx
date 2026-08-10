@@ -1,6 +1,10 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { ApprovalQueue } from '@/components/approval/ApprovalQueue'
 
+// Force per-request rendering — otherwise this gets statically prerendered at
+// build time and the approval queue never reflects new drafts.
+export const dynamic = 'force-dynamic'
+
 async function getDrafts() {
   const supabase = createServiceClient()
   const { data } = await supabase

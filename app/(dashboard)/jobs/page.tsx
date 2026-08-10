@@ -1,6 +1,10 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { JobsBoard } from '@/components/jobs/JobsBoard'
 
+// Force per-request rendering — otherwise this gets statically prerendered at
+// build time and never reflects new/updated job postings.
+export const dynamic = 'force-dynamic'
+
 async function getJobs() {
   const supabase = createServiceClient()
   const { data } = await supabase

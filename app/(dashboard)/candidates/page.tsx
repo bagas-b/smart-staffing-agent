@@ -5,6 +5,10 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 
+// Force per-request rendering — otherwise this gets statically prerendered at
+// build time and the kanban board never reflects DB changes (e.g. status updates).
+export const dynamic = 'force-dynamic'
+
 async function getCandidates() {
   const supabase = createServiceClient()
   const { data } = await supabase

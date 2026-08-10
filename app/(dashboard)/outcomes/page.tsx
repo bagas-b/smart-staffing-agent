@@ -4,6 +4,10 @@ import { PendingCheckins, daysAgo, type PendingCheckin } from '@/components/outc
 import { ResignList, type ResignEntry } from '@/components/outcomes/ResignList'
 import { createServiceClient } from '@/lib/supabase/server'
 
+// Force per-request rendering — otherwise this gets statically prerendered at
+// build time and never reflects new hire/performance data.
+export const dynamic = 'force-dynamic'
+
 const COMPANY_ID = process.env.COMPANY_ID!
 
 // Supabase's untyped client infers to-one embeds as arrays; normalize defensively
