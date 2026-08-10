@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local git worktree scratch space (superpowers plan-driven-development) —
+    // gitignored, has its own next-env.d.ts/build artifacts, shouldn't be linted.
+    ".worktrees/**",
+    // Separate standalone Node microservice (Baileys WA), not part of the
+    // Next.js app — not written against React/Next lint rules.
+    "baileys-service/**",
   ]),
 ]);
 
