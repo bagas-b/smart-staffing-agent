@@ -211,7 +211,7 @@ function PerformanceForm({ candidateId, hire, onSaved }: { candidateId: string; 
 
 // ─── Main section ───────────────────────────────────────────────────────────────
 
-export function HireSection({ candidateId }: { candidateId: string }) {
+export function HireSection({ candidateId, status }: { candidateId: string; status: string }) {
   const [hire, setHire] = useState<HireRecord | null | undefined>(undefined) // undefined = loading
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -229,8 +229,14 @@ export function HireSection({ candidateId }: { candidateId: string }) {
   if (hire === undefined) return null // still loading — don't flash the "mark hired" prompt
 
   if (!hire) {
+    // "Tandai Direkrut" only makes sense once the candidate has actually
+    // passed interview — showing it any earlier let HR skip straight to
+    // hired from any stage, bypassing the interview decision entirely.
+    if (status !== 'lulus_interview') return null
     return <MarkHiredForm candidateId={candidateId} onDone={refresh} />
   }
 
+  // A hire record already exists (status may have since moved on to
+  // onboarding/aktif) — keep showing the performance tracker regardless.
   return <PerformanceForm candidateId={candidateId} hire={hire} onSaved={refresh} />
 }

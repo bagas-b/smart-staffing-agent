@@ -413,7 +413,7 @@ export function CandidateModal({ candidateId, onClose, snapshot }: CandidateModa
           )}
 
           {/* Onboarding & Performance */}
-          {!fetching && candidateId && <HireSection candidateId={candidateId} />}
+          {!fetching && current && <HireSection candidateId={current.id} status={current.status} />}
 
           {/* AI Analysis */}
           {!fetching && candidateId && <ScoreSection candidateId={candidateId} />}
