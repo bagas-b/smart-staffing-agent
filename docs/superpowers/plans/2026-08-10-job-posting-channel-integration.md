@@ -209,6 +209,13 @@ export async function GET(req: Request) {
         await supabase.from('agent_tasks').insert({
           company_id: COMPANY_ID, type: 'score', payload: { candidate_id: candidate!.id },
         })
+        // draft_initial_outreach landed 2026-08-10 (see ApprovalQueue bulk-approval
+        // commit) — CSV upload / manual add already enqueue it when a phone number
+        // is present. Email-sourced candidates from this ingestion typically won't
+        // have one (they applied by email), so processInitialOutreachTask's
+        // wa/telegram-only channel logic in app/api/agent/run/route.ts will need a
+        // third 'email' branch (send via the same mailbox this ingestion reads
+        // from) before enqueueing outreach tasks here is useful.
         matched++
       }
     } else {
