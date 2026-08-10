@@ -5,7 +5,7 @@ import { CandidateModal } from './CandidateModal'
 import { AddCandidateModal } from './AddCandidateModal'
 import { CandidateUploadForm } from './CandidateUploadForm'
 import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
+import { Plus, Send } from 'lucide-react'
 
 interface CandidateScore {
   hire_success_probability: number
@@ -46,7 +46,33 @@ export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Ca
   const router = useRouter()
   const [selectedId, setSelectedId] = useState<string | null>(initialCandidateId ?? null)
   const [addingOpen, setAddingOpen] = useState(false)
+  const [generatingOutreach, setGeneratingOutreach] = useState(false)
+  const [outreachMessage, setOutreachMessage] = useState('')
   const selectedCandidate = selectedId ? candidates.find(c => c.id === selectedId) : null
+
+  async function generateOutreach() {
+    setGeneratingOutreach(true)
+    setOutreachMessage('')
+    try {
+      const res = await fetch('/api/candidates/generate-outreach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Gagal generate outreach')
+      setOutreachMessage(
+        data.enqueued === 0
+          ? (data.skipped > 0 ? `Semua ${data.skipped} kandidat sudah punya draft sebelumnya.` : 'Tidak ada kandidat dengan nomor WA di kolom ini.')
+          : `${data.enqueued} draft outreach dibuat — cek menu Approval.`
+      )
+      router.refresh()
+    } catch (e: unknown) {
+      setOutreachMessage(e instanceof Error ? e.message : 'Gagal generate outreach')
+    } finally {
+      setGeneratingOutreach(false)
+    }
+  }
 
   // Re-fetch server data on close (candidate status may have changed — hire,
   // scoring, message-driven classification) and drop any ?candidate= deep link
@@ -70,6 +96,10 @@ export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Ca
         </div>
       </div>
 
+      {outreachMessage && (
+        <p className="text-xs text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">{outreachMessage}</p>
+      )}
+
       {/* Board — columns stretch to fill available width, scroll horizontally only when they don't fit */}
       <div className="flex gap-3 overflow-x-auto pb-3 min-h-0" style={{ maxHeight: 'calc(100vh - 200px)' }}>
         {PIPELINE.map(col => {
@@ -82,6 +112,17 @@ export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Ca
                 <span className="text-xs font-semibold text-gray-700 truncate">{col.label}</span>
                 <span className="ml-auto text-xs text-gray-400 font-normal flex-shrink-0">{items.length}</span>
               </div>
+              {col.key === 'belum_dihubungi' && items.length > 0 && (
+                <button
+                  onClick={generateOutreach}
+                  disabled={generatingOutreach}
+                  title="Buat draft pesan pembuka untuk kandidat di kolom ini yang belum pernah di-draft-kan"
+                  className="flex items-center justify-center gap-1.5 text-[11px] px-2 py-1.5 border border-t-0 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors disabled:opacity-50"
+                >
+                  <Send size={11} />
+                  {generatingOutreach ? 'Memproses...' : 'Generate Outreach'}
+                </button>
+              )}
 
               {/* Card list — scrolls vertically */}
               <div className="flex-1 overflow-y-auto border rounded-b-lg bg-white p-1.5 space-y-1.5 min-h-20">
