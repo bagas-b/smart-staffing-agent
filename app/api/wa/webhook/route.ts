@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   await supabase.from('agent_tasks').insert({
     company_id: COMPANY_ID,
     type: 'classify_reply',
-    payload: { candidate_id: candidate.id, message, from },
+    payload: { candidate_id: candidate.id, message, from, channel: 'wa' },
     status: 'pending',
     attempts: 0,
   })

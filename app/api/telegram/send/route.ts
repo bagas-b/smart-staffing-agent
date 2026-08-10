@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const supabase = createServiceClient()
   const { data: candidate } = await supabase
     .from('candidates')
-    .select('telegram_chat_id')
+    .select('name, telegram_chat_id')
     .eq('id', candidateId)
     .eq('company_id', COMPANY_ID)
     .single()
@@ -42,6 +42,13 @@ export async function POST(req: NextRequest) {
     .eq('id', candidateId)
     .eq('company_id', COMPANY_ID)
     .eq('status', 'belum_dihubungi')
+
+  await supabase.from('agent_logs').insert({
+    company_id: COMPANY_ID,
+    type: 'success',
+    message: `Pesan Telegram terkirim ke ${candidate.name}`,
+    metadata: { candidateId },
+  })
 
   return NextResponse.json({ success: true })
 }

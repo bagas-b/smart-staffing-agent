@@ -19,8 +19,13 @@ async function getCandidates() {
   return data ?? []
 }
 
-export default async function CandidatesPage() {
+export default async function CandidatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ candidate?: string }>
+}) {
   const candidates = await getCandidates()
+  const { candidate } = await searchParams
 
   return (
     <div className="p-6 space-y-5">
@@ -36,7 +41,7 @@ export default async function CandidatesPage() {
           </Link>
         </div>
       </div>
-      <KanbanBoard candidates={candidates} />
+      <KanbanBoard candidates={candidates} initialCandidateId={candidate} />
     </div>
   )
 }

@@ -90,15 +90,40 @@ async function processScoreTask(
     processed_at: new Date().toISOString(),
   }).eq('id', task.id)
 
-  await supabase.from('candidates').update({ last_agent_action: 'scored' }).eq('id', candidate_id)
+  const { data: candidate } = await supabase
+    .from('candidates')
+    .update({ last_agent_action: 'scored' })
+    .eq('id', candidate_id)
+    .select('name')
+    .single()
+
+  await supabase.from('agent_logs').insert({
+    company_id: COMPANY_ID,
+    type: finalStatus === 'needs_review' ? 'info' : 'ai',
+    message: finalStatus === 'needs_review'
+      ? `${candidate?.name ?? 'Kandidat'} di-score tapi confidence rendah — perlu direview manual`
+      : `${candidate?.name ?? 'Kandidat'} berhasil di-score (${result.hire_success_probability}% prob. hire)`,
+    metadata: { candidate_id },
+  })
 }
 
 async function processClassifyTask(
   supabase: ReturnType<typeof createServiceClient>,
-  task: { id: string; payload: { candidate_id?: string; message?: string } },
+  task: { id: string; payload: { candidate_id?: string; message?: string; channel?: string } },
 ) {
-  const { candidate_id, message } = task.payload
+  const { candidate_id, message, channel: inboundChannel } = task.payload
   if (!candidate_id || !message) throw new Error('missing candidate_id or message in payload')
+  // The auto-drafted reply must go out on whatever channel the candidate actually
+  // messaged in on — defaulting to 'wa' here would silently produce an
+  // undeliverable draft for Telegram-only candidates.
+  const replyChannel = inboundChannel === 'telegram' ? 'telegram' : 'wa'
+
+  const { data: candidate } = await supabase
+    .from('candidates')
+    .select('name, position, outlet')
+    .eq('id', candidate_id)
+    .eq('company_id', COMPANY_ID)
+    .single()
 
   const prompt = `Kamu adalah asisten HR. Klasifikasikan balasan kandidat berikut.
 
@@ -144,13 +169,6 @@ Jawab HANYA dalam format JSON:
 
   if (parsed.classification === 'butuh_info') {
     // Fetch job info for context
-    const { data: candidate } = await supabase
-      .from('candidates')
-      .select('name, position, outlet')
-      .eq('id', candidate_id)
-      .eq('company_id', COMPANY_ID)
-      .single()
-
     const { data: job } = await supabase
       .from('job_postings')
       .select('title, salary_range, description')
@@ -174,7 +192,7 @@ Buat pesan yang ramah, informatif, dalam Bahasa Indonesia. Kembalikan hanya teks
       candidate_id,
       company_id: COMPANY_ID,
       direction: 'draft',
-      channel: 'wa',
+      channel: replyChannel,
       content: draftText.trim(),
       sent_by: 'agent',
     })
@@ -186,10 +204,15 @@ Buat pesan yang ramah, informatif, dalam Bahasa Indonesia. Kembalikan hanya teks
     processed_at: new Date().toISOString(),
   }).eq('id', task.id)
 
+  const CLASSIFICATION_LABEL: Record<string, string> = {
+    tertarik: 'tertarik',
+    tidak_tertarik: 'tidak tertarik',
+    butuh_info: 'butuh info lebih lanjut',
+  }
   await supabase.from('agent_logs').insert({
     company_id: COMPANY_ID,
     type: 'info',
-    message: `Balasan diklasifikasikan: ${parsed.classification}`,
+    message: `Balasan ${candidate?.name ?? 'kandidat'} diklasifikasikan: ${CLASSIFICATION_LABEL[parsed.classification] ?? parsed.classification}`,
     metadata: { candidate_id, classification: parsed.classification },
   })
 }
@@ -203,12 +226,16 @@ async function processDraftFollowUpTask(
 
   const { data: candidate } = await supabase
     .from('candidates')
-    .select('id, name, follow_up_count, position, outlet')
+    .select('id, name, follow_up_count, position, outlet, phone, telegram_chat_id')
     .eq('id', candidate_id)
     .eq('company_id', COMPANY_ID)
     .single()
 
   if (!candidate) throw new Error(`candidate ${candidate_id} not found`)
+
+  // Prefer whichever channel the candidate is actually reachable on — defaulting
+  // to 'wa' would produce an undeliverable draft for Telegram-only candidates.
+  const followUpChannel = candidate.telegram_chat_id ? 'telegram' : 'wa'
 
   if ((candidate.follow_up_count ?? 0) >= 2) {
     await supabase.from('candidates').update({
@@ -234,7 +261,7 @@ Tulis langsung isi pesannya saja, tanpa label atau penjelasan tambahan.`
     candidate_id,
     company_id: COMPANY_ID,
     direction: 'draft',
-    channel: 'wa',
+    channel: followUpChannel,
     content: draftText.trim(),
     sent_by: 'agent',
   })
@@ -243,6 +270,13 @@ Tulis langsung isi pesannya saja, tanpa label atau penjelasan tambahan.`
     follow_up_count: (candidate.follow_up_count ?? 0) + 1,
     last_agent_action: 'draft_follow_up_created',
   }).eq('id', candidate_id)
+
+  await supabase.from('agent_logs').insert({
+    company_id: COMPANY_ID,
+    type: 'ai',
+    message: `Draft follow-up dibuat untuk ${candidate.name} (menunggu approval)`,
+    metadata: { candidate_id },
+  })
 
   await supabase.from('agent_tasks').update({
     status: 'done',

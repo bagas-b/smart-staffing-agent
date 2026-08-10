@@ -38,16 +38,17 @@ function TierBadge({ score }: { score: CandidateScore | undefined | null }) {
   return <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">Review</span>
 }
 
-export function KanbanBoard({ candidates }: { candidates: Candidate[] }) {
+export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Candidate[]; initialCandidateId?: string }) {
   const router = useRouter()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(initialCandidateId ?? null)
   const selectedCandidate = selectedId ? candidates.find(c => c.id === selectedId) : null
 
-  // Re-fetch server data on close — the modal can change candidate status
-  // (hire, scoring, message-driven classification) that the board must reflect.
+  // Re-fetch server data on close (candidate status may have changed — hire,
+  // scoring, message-driven classification) and drop any ?candidate= deep link
+  // so a page refresh doesn't reopen the modal.
   function closeModal() {
     setSelectedId(null)
-    router.refresh()
+    router.replace('/candidates')
   }
 
   return (

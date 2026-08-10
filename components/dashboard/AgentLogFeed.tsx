@@ -13,6 +13,7 @@ const typeStyles: Record<string, string> = {
   info: 'bg-blue-50 text-blue-700 border border-blue-100',
   ai: 'bg-purple-50 text-purple-700 border border-purple-100',
   wa: 'bg-green-50 text-green-700 border border-green-100',
+  success: 'bg-green-50 text-green-700 border border-green-100',
   system: 'bg-gray-100 text-gray-600',
   error: 'bg-red-100 text-red-700 border border-red-200 font-medium',
 }
