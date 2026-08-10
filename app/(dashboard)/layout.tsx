@@ -8,7 +8,7 @@ const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/candidates', label: 'Kandidat', icon: Users },
   { href: '/jobs', label: 'Job Posting', icon: Briefcase },
-  { href: '/messages', label: 'Pesan', icon: MessageSquare },
+  { href: '/messages', label: 'Chat', icon: MessageSquare },
   { href: '/outcomes', label: 'Outcomes', icon: BarChart2 },
   { href: '/approval', label: 'Approval', icon: CheckSquare },
 ]

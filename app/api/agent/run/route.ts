@@ -3,7 +3,11 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { callClaude } from '@/lib/ai/client'
 
 const COMPANY_ID = process.env.COMPANY_ID!
-const MAX_TASKS_PER_RUN = 10
+const MAX_TASKS_PER_RUN = 40
+// Sequential AI calls across up to 40 tasks can take a while — give this route
+// the most headroom Vercel Hobby allows (default would be far too short and
+// silently strand the tail of a batch as 'pending' with no error, no retry).
+export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -13,11 +17,16 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
+  // Also reclaim tasks stuck at 'processing' for >10 minutes — the previous
+  // run's function almost certainly got killed (timeout, cold-start eviction)
+  // mid-task, and nothing else ever revisits 'processing' rows since only
+  // 'pending' is queried here by default.
+  const staleThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString()
   const { data: tasks } = await supabase
     .from('agent_tasks')
     .select('*')
     .eq('company_id', COMPANY_ID)
-    .eq('status', 'pending')
+    .or(`status.eq.pending,and(status.eq.processing,created_at.lt.${staleThreshold})`)
     .order('created_at')
     .limit(MAX_TASKS_PER_RUN)
 
@@ -37,6 +46,8 @@ export async function POST(req: NextRequest) {
         await processClassifyTask(supabase, task)
       } else if (task.type === 'draft_follow_up') {
         await processDraftFollowUpTask(supabase, task)
+      } else if (task.type === 'draft_initial_outreach') {
+        await processInitialOutreachTask(supabase, task)
       } else {
         throw new Error(`unknown task type: ${task.type}`)
       }
@@ -90,15 +101,40 @@ async function processScoreTask(
     processed_at: new Date().toISOString(),
   }).eq('id', task.id)
 
-  await supabase.from('candidates').update({ last_agent_action: 'scored' }).eq('id', candidate_id)
+  const { data: candidate } = await supabase
+    .from('candidates')
+    .update({ last_agent_action: 'scored' })
+    .eq('id', candidate_id)
+    .select('name')
+    .single()
+
+  await supabase.from('agent_logs').insert({
+    company_id: COMPANY_ID,
+    type: finalStatus === 'needs_review' ? 'info' : 'ai',
+    message: finalStatus === 'needs_review'
+      ? `${candidate?.name ?? 'Kandidat'} di-score tapi confidence rendah — perlu direview manual`
+      : `${candidate?.name ?? 'Kandidat'} berhasil di-score (${result.hire_success_probability}% prob. hire)`,
+    metadata: { candidate_id },
+  })
 }
 
 async function processClassifyTask(
   supabase: ReturnType<typeof createServiceClient>,
-  task: { id: string; payload: { candidate_id?: string; message?: string } },
+  task: { id: string; payload: { candidate_id?: string; message?: string; channel?: string } },
 ) {
-  const { candidate_id, message } = task.payload
+  const { candidate_id, message, channel: inboundChannel } = task.payload
   if (!candidate_id || !message) throw new Error('missing candidate_id or message in payload')
+  // The auto-drafted reply must go out on whatever channel the candidate actually
+  // messaged in on — defaulting to 'wa' here would silently produce an
+  // undeliverable draft for Telegram-only candidates.
+  const replyChannel = inboundChannel === 'telegram' ? 'telegram' : 'wa'
+
+  const { data: candidate } = await supabase
+    .from('candidates')
+    .select('name, position, outlet')
+    .eq('id', candidate_id)
+    .eq('company_id', COMPANY_ID)
+    .single()
 
   const prompt = `Kamu adalah asisten HR. Klasifikasikan balasan kandidat berikut.
 
@@ -144,13 +180,6 @@ Jawab HANYA dalam format JSON:
 
   if (parsed.classification === 'butuh_info') {
     // Fetch job info for context
-    const { data: candidate } = await supabase
-      .from('candidates')
-      .select('name, position, outlet')
-      .eq('id', candidate_id)
-      .eq('company_id', COMPANY_ID)
-      .single()
-
     const { data: job } = await supabase
       .from('job_postings')
       .select('title, salary_range, description')
@@ -174,7 +203,7 @@ Buat pesan yang ramah, informatif, dalam Bahasa Indonesia. Kembalikan hanya teks
       candidate_id,
       company_id: COMPANY_ID,
       direction: 'draft',
-      channel: 'wa',
+      channel: replyChannel,
       content: draftText.trim(),
       sent_by: 'agent',
     })
@@ -186,10 +215,15 @@ Buat pesan yang ramah, informatif, dalam Bahasa Indonesia. Kembalikan hanya teks
     processed_at: new Date().toISOString(),
   }).eq('id', task.id)
 
+  const CLASSIFICATION_LABEL: Record<string, string> = {
+    tertarik: 'tertarik',
+    tidak_tertarik: 'tidak tertarik',
+    butuh_info: 'butuh info lebih lanjut',
+  }
   await supabase.from('agent_logs').insert({
     company_id: COMPANY_ID,
     type: 'info',
-    message: `Balasan diklasifikasikan: ${parsed.classification}`,
+    message: `Balasan ${candidate?.name ?? 'kandidat'} diklasifikasikan: ${CLASSIFICATION_LABEL[parsed.classification] ?? parsed.classification}`,
     metadata: { candidate_id, classification: parsed.classification },
   })
 }
@@ -203,12 +237,16 @@ async function processDraftFollowUpTask(
 
   const { data: candidate } = await supabase
     .from('candidates')
-    .select('id, name, follow_up_count, position, outlet')
+    .select('id, name, follow_up_count, position, outlet, phone, telegram_chat_id')
     .eq('id', candidate_id)
     .eq('company_id', COMPANY_ID)
     .single()
 
   if (!candidate) throw new Error(`candidate ${candidate_id} not found`)
+
+  // Prefer whichever channel the candidate is actually reachable on — defaulting
+  // to 'wa' would produce an undeliverable draft for Telegram-only candidates.
+  const followUpChannel = candidate.telegram_chat_id ? 'telegram' : 'wa'
 
   if ((candidate.follow_up_count ?? 0) >= 2) {
     await supabase.from('candidates').update({
@@ -234,7 +272,7 @@ Tulis langsung isi pesannya saja, tanpa label atau penjelasan tambahan.`
     candidate_id,
     company_id: COMPANY_ID,
     direction: 'draft',
-    channel: 'wa',
+    channel: followUpChannel,
     content: draftText.trim(),
     sent_by: 'agent',
   })
@@ -243,6 +281,90 @@ Tulis langsung isi pesannya saja, tanpa label atau penjelasan tambahan.`
     follow_up_count: (candidate.follow_up_count ?? 0) + 1,
     last_agent_action: 'draft_follow_up_created',
   }).eq('id', candidate_id)
+
+  await supabase.from('agent_logs').insert({
+    company_id: COMPANY_ID,
+    type: 'ai',
+    message: `Draft follow-up dibuat untuk ${candidate.name} (menunggu approval)`,
+    metadata: { candidate_id },
+  })
+
+  await supabase.from('agent_tasks').update({
+    status: 'done',
+    processed_at: new Date().toISOString(),
+  }).eq('id', task.id)
+}
+
+async function processInitialOutreachTask(
+  supabase: ReturnType<typeof createServiceClient>,
+  task: { id: string; payload: { candidate_id?: string } },
+) {
+  const { candidate_id } = task.payload
+  if (!candidate_id) throw new Error('missing candidate_id in payload')
+
+  const { data: candidate } = await supabase
+    .from('candidates')
+    .select('id, name, position, outlet, phone, telegram_chat_id, applied_job_id')
+    .eq('id', candidate_id)
+    .eq('company_id', COMPANY_ID)
+    .single()
+
+  if (!candidate) throw new Error(`candidate ${candidate_id} not found`)
+
+  // Nothing to reach the candidate on yet — surface this as a failed task
+  // (after retry) so it shows up for HR to add a phone/link Telegram manually,
+  // rather than silently doing nothing.
+  const channel = candidate.telegram_chat_id ? 'telegram' : candidate.phone ? 'wa' : null
+  if (!channel) throw new Error('candidate has no phone number or linked Telegram to contact')
+
+  let jobTitle: string | null = null
+  if (candidate.applied_job_id) {
+    const { data: job } = await supabase
+      .from('job_postings')
+      .select('title')
+      .eq('id', candidate.applied_job_id)
+      .eq('company_id', COMPANY_ID)
+      .single()
+    jobTitle = job?.title ?? null
+  }
+
+  const prompt = `Buatkan pesan outreach untuk kandidat recruitment.
+
+Nama kandidat: ${candidate.name}
+Posisi yang ditawarkan: ${candidate.position ?? 'Staff'}
+Outlet: ${candidate.outlet ?? 'Greenly Cloud Kitchen'}
+${jobTitle ? `Lowongan: ${jobTitle}` : ''}
+
+Pesan harus:
+- Singkat dan natural (maks 3 paragraf)
+- Menyebutkan nama kandidat
+- Menjelaskan posisi yang ditawarkan
+- Meminta konfirmasi apakah tertarik
+- Bahasa Indonesia yang ramah dan profesional, tidak terlalu formal
+
+Tulis hanya isi pesannya saja, tanpa label atau penjelasan tambahan.`
+
+  const draftText = await callClaude([{ role: 'user', content: prompt }])
+
+  await supabase.from('candidate_messages').insert({
+    candidate_id,
+    company_id: COMPANY_ID,
+    direction: 'draft',
+    channel,
+    content: draftText.trim(),
+    sent_by: 'agent',
+  })
+
+  await supabase.from('candidates').update({
+    last_agent_action: 'draft_initial_outreach_created',
+  }).eq('id', candidate_id)
+
+  await supabase.from('agent_logs').insert({
+    company_id: COMPANY_ID,
+    type: 'ai',
+    message: `Draft pesan pertama dibuat untuk ${candidate.name} (menunggu approval)`,
+    metadata: { candidate_id },
+  })
 
   await supabase.from('agent_tasks').update({
     status: 'done',

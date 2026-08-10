@@ -32,20 +32,21 @@ export async function POST(req: NextRequest) {
   // Fetch candidate data
   const { data: candidate, error: candErr } = await supabase
     .from('candidates')
-    .select('name, position, outlet, notes, source, cv_url, phone, email')
+    .select('name, position, outlet, notes, source, cv_url, phone, email, applied_job_id')
     .eq('id', candidate_id)
     .eq('company_id', COMPANY_ID)
     .single()
 
   if (candErr || !candidate) return NextResponse.json({ error: 'candidate not found' }, { status: 404 })
 
-  // Fetch job posting if provided
+  // Fetch job posting if provided, falling back to the job the candidate applied to
+  const effectiveJobId = job_posting_id ?? candidate.applied_job_id
   let jobContext = ''
-  if (job_posting_id) {
+  if (effectiveJobId) {
     const { data: job } = await supabase
       .from('job_postings')
       .select('title, position, outlet, requirements, benefits, salary_range')
-      .eq('id', job_posting_id)
+      .eq('id', effectiveJobId)
       .eq('company_id', COMPANY_ID)
       .single()
     if (job) {

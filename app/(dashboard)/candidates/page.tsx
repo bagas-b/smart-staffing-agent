@@ -1,9 +1,9 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { CandidateUploadForm } from '@/components/candidates/CandidateUploadForm'
 import { KanbanBoard } from '@/components/candidates/KanbanBoard'
-import { buttonVariants } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import Link from 'next/link'
+
+// Force per-request rendering — otherwise this gets statically prerendered at
+// build time and the kanban board never reflects DB changes (e.g. status updates).
+export const dynamic = 'force-dynamic'
 
 async function getCandidates() {
   const supabase = createServiceClient()
@@ -15,24 +15,17 @@ async function getCandidates() {
   return data ?? []
 }
 
-export default async function CandidatesPage() {
+export default async function CandidatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ candidate?: string }>
+}) {
   const candidates = await getCandidates()
+  const { candidate } = await searchParams
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-800">
-          Kandidat <span className="text-gray-400 font-normal text-base">({candidates.length})</span>
-        </h1>
-        <div className="flex gap-2">
-          <CandidateUploadForm />
-          <Link href="/candidates/new"
-            className={cn(buttonVariants(), 'bg-[#1E3A2F] hover:bg-[#2d5242] gap-2')}>
-            + Tambah Kandidat
-          </Link>
-        </div>
-      </div>
-      <KanbanBoard candidates={candidates} />
+    <div className="p-6">
+      <KanbanBoard candidates={candidates} initialCandidateId={candidate} />
     </div>
   )
 }

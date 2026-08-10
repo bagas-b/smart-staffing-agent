@@ -1,19 +1,16 @@
 import { NextResponse, NextRequest } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { dispatchDraft } from '@/lib/approval/dispatch'
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const { id } = await req.json()
   const serviceSupabase = createServiceClient()
-  const { error } = await serviceSupabase
-    .from('candidate_messages')
-    .update({ direction: 'outbound' })
-    .eq('id', id)
-    .eq('company_id', process.env.COMPANY_ID!)
-    .eq('direction', 'draft')
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const result = await dispatchDraft(serviceSupabase, id)
+
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 })
   return NextResponse.json({ ok: true })
 }
