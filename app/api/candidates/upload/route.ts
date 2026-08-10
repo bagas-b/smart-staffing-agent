@@ -12,6 +12,50 @@ function pick(row: Record<string, unknown>, ...keys: string[]): string {
   return ''
 }
 
+/**
+ * XLSX.read(buffer, { type: 'buffer' })'s CSV auto-detection doesn't reliably
+ * respect RFC4180 quoting — a quoted field containing a comma (e.g. a notes
+ * column like `"5 tahun pengalaman, terbiasa shift malam"`) gets split on
+ * that inner comma instead of treated as one field, silently corrupting every
+ * column after it. Parsing CSV text ourselves sidesteps that entirely; XLSX
+ * is still used for real .xlsx/.xls binary files below.
+ */
+function parseCsv(text: string): Record<string, string>[] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+
+  // Normalize line endings, strip a leading UTF-8 BOM if present.
+  const src = text.replace(/^﻿/, '').replace(/\r\n/g, '\n')
+
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') { field += '"'; i++ } // escaped quote
+        else inQuotes = false
+      } else {
+        field += ch
+      }
+    } else if (ch === '"') {
+      inQuotes = true
+    } else if (ch === ',') {
+      row.push(field); field = ''
+    } else if (ch === '\n') {
+      row.push(field); field = ''
+      rows.push(row); row = []
+    } else {
+      field += ch
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row) }
+
+  const [header, ...dataRows] = rows.filter(r => r.some(cell => cell.trim() !== ''))
+  if (!header) return []
+  return dataRows.map(r => Object.fromEntries(header.map((h, i) => [h.trim(), (r[i] ?? '').trim()])))
+}
+
 export async function POST(req: NextRequest) {
   const supabase = createServiceClient()
   const formData = await req.formData()
@@ -20,9 +64,13 @@ export async function POST(req: NextRequest) {
   const jobPostingId = (formData.get('job_posting_id') as string | null) || null
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  const wb = XLSX.read(buffer, { type: 'buffer' })
-  const ws = wb.Sheets[wb.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws)
+  let rows: Record<string, unknown>[]
+  if (file.name.toLowerCase().endsWith('.csv')) {
+    rows = parseCsv(buffer.toString('utf-8'))
+  } else {
+    const wb = XLSX.read(buffer, { type: 'buffer' })
+    rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]])
+  }
 
   const { data: batch, error: batchError } = await supabase
     .from('candidate_imports')
