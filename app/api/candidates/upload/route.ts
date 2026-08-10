@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
 
   let imported = 0
   const importedIds: string[] = []
+  const contactableIds: string[] = [] // has a phone number — worth drafting outreach for
   for (const row of rows) {
     const name = pick(row, 'name', 'nama', 'Name', 'Nama')
     const phone = pick(row, 'phone', 'nomor', 'wa', 'Phone', 'Nomor', 'WA')
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
     if (!error && inserted) {
       imported++
       importedIds.push(inserted.id)
+      if (phone) contactableIds.push(inserted.id)
     }
   }
 
@@ -58,13 +60,20 @@ export async function POST(req: NextRequest) {
     .eq('id', batch.id)
 
   if (importedIds.length > 0) {
-    await supabase.from('agent_tasks').insert(
-      importedIds.map(candidate_id => ({
+    await supabase.from('agent_tasks').insert([
+      ...importedIds.map(candidate_id => ({
         company_id: COMPANY_ID,
         type: 'score',
         payload: { candidate_id },
-      }))
-    )
+      })),
+      // Draft a first-contact message HR can review/edit and approve — only for
+      // rows with a phone number, otherwise there's nothing to send it on yet.
+      ...contactableIds.map(candidate_id => ({
+        company_id: COMPANY_ID,
+        type: 'draft_initial_outreach',
+        payload: { candidate_id },
+      })),
+    ])
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
     fetch(`${baseUrl}/api/agent/run`, {
       method: 'POST',

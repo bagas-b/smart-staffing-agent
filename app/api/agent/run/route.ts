@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
         await processClassifyTask(supabase, task)
       } else if (task.type === 'draft_follow_up') {
         await processDraftFollowUpTask(supabase, task)
+      } else if (task.type === 'draft_initial_outreach') {
+        await processInitialOutreachTask(supabase, task)
       } else {
         throw new Error(`unknown task type: ${task.type}`)
       }
@@ -275,6 +277,83 @@ Tulis langsung isi pesannya saja, tanpa label atau penjelasan tambahan.`
     company_id: COMPANY_ID,
     type: 'ai',
     message: `Draft follow-up dibuat untuk ${candidate.name} (menunggu approval)`,
+    metadata: { candidate_id },
+  })
+
+  await supabase.from('agent_tasks').update({
+    status: 'done',
+    processed_at: new Date().toISOString(),
+  }).eq('id', task.id)
+}
+
+async function processInitialOutreachTask(
+  supabase: ReturnType<typeof createServiceClient>,
+  task: { id: string; payload: { candidate_id?: string } },
+) {
+  const { candidate_id } = task.payload
+  if (!candidate_id) throw new Error('missing candidate_id in payload')
+
+  const { data: candidate } = await supabase
+    .from('candidates')
+    .select('id, name, position, outlet, phone, telegram_chat_id, applied_job_id')
+    .eq('id', candidate_id)
+    .eq('company_id', COMPANY_ID)
+    .single()
+
+  if (!candidate) throw new Error(`candidate ${candidate_id} not found`)
+
+  // Nothing to reach the candidate on yet — surface this as a failed task
+  // (after retry) so it shows up for HR to add a phone/link Telegram manually,
+  // rather than silently doing nothing.
+  const channel = candidate.telegram_chat_id ? 'telegram' : candidate.phone ? 'wa' : null
+  if (!channel) throw new Error('candidate has no phone number or linked Telegram to contact')
+
+  let jobTitle: string | null = null
+  if (candidate.applied_job_id) {
+    const { data: job } = await supabase
+      .from('job_postings')
+      .select('title')
+      .eq('id', candidate.applied_job_id)
+      .eq('company_id', COMPANY_ID)
+      .single()
+    jobTitle = job?.title ?? null
+  }
+
+  const prompt = `Buatkan pesan outreach untuk kandidat recruitment.
+
+Nama kandidat: ${candidate.name}
+Posisi yang ditawarkan: ${candidate.position ?? 'Staff'}
+Outlet: ${candidate.outlet ?? 'Greenly Cloud Kitchen'}
+${jobTitle ? `Lowongan: ${jobTitle}` : ''}
+
+Pesan harus:
+- Singkat dan natural (maks 3 paragraf)
+- Menyebutkan nama kandidat
+- Menjelaskan posisi yang ditawarkan
+- Meminta konfirmasi apakah tertarik
+- Bahasa Indonesia yang ramah dan profesional, tidak terlalu formal
+
+Tulis hanya isi pesannya saja, tanpa label atau penjelasan tambahan.`
+
+  const draftText = await callClaude([{ role: 'user', content: prompt }])
+
+  await supabase.from('candidate_messages').insert({
+    candidate_id,
+    company_id: COMPANY_ID,
+    direction: 'draft',
+    channel,
+    content: draftText.trim(),
+    sent_by: 'agent',
+  })
+
+  await supabase.from('candidates').update({
+    last_agent_action: 'draft_initial_outreach_created',
+  }).eq('id', candidate_id)
+
+  await supabase.from('agent_logs').insert({
+    company_id: COMPANY_ID,
+    type: 'ai',
+    message: `Draft pesan pertama dibuat untuk ${candidate.name} (menunggu approval)`,
     metadata: { candidate_id },
   })
 
