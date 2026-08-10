@@ -1,8 +1,13 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendWA } from '@/lib/baileys/client'
 import { sendTelegramMessage } from '@/lib/telegram/client'
 
 const COMPANY_ID = process.env.COMPANY_ID!
+
+// TEMPORARY: WA (Baileys) isn't configured yet, so every approved draft — WA or
+// Telegram — goes out via Telegram instead. Candidates who haven't done their own
+// /start deep-link fall back to this shared chat_id. Remove this whole override
+// (and restore the wa/telegram branch below) once Baileys has a working key.
+const TELEGRAM_FALLBACK_CHAT_ID = process.env.TELEGRAM_FALLBACK_CHAT_ID
 
 type ServiceClient = ReturnType<typeof createServiceClient>
 
@@ -31,15 +36,10 @@ export async function dispatchDraft(supabase: ServiceClient, draftId: string): P
   const candidate = draft.candidates as unknown as { phone: string | null; telegram_chat_id: string | null } | null
 
   try {
-    if (draft.channel === 'telegram') {
-      if (!candidate?.telegram_chat_id) throw new Error('Kandidat belum terhubung ke Telegram')
-      await sendTelegramMessage(candidate.telegram_chat_id, draft.content)
-    } else if (draft.channel === 'wa') {
-      if (!candidate?.phone) throw new Error('Kandidat tidak punya nomor WA')
-      await sendWA(candidate.phone, draft.content)
-    } else {
-      throw new Error(`Channel '${draft.channel}' belum didukung untuk pengiriman otomatis`)
-    }
+    // TEMPORARY override — see TELEGRAM_FALLBACK_CHAT_ID comment above.
+    const chatId = candidate?.telegram_chat_id ?? TELEGRAM_FALLBACK_CHAT_ID
+    if (!chatId) throw new Error('Kandidat belum terhubung ke Telegram dan tidak ada fallback chat_id')
+    await sendTelegramMessage(chatId, draft.content)
   } catch (e: unknown) {
     // Leave direction='draft' on failure — never mark as sent without confirmation.
     return { id: draftId, ok: false, error: e instanceof Error ? e.message : 'Gagal mengirim pesan' }
