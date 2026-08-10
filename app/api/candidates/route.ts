@@ -19,12 +19,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const supabase = createServiceClient()
   const body = await req.json()
-  const { name, phone, position, outlet, notes, source = 'import' } = body
+  const { name, phone, position, outlet, notes, source = 'import', applied_job_id } = body
   if (!name) return NextResponse.json({ error: 'name required' }, { status: 400 })
 
   const { data, error } = await supabase
     .from('candidates')
-    .insert({ company_id: COMPANY_ID, name, phone, position, outlet, notes, source })
+    .insert({ company_id: COMPANY_ID, name, phone, position, outlet, notes, source, applied_job_id: applied_job_id ?? null })
     .select()
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData()
   const file = formData.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'file required' }, { status: 400 })
+  const jobPostingId = (formData.get('job_posting_id') as string | null) || null
 
   const buffer = Buffer.from(await file.arrayBuffer())
   const wb = XLSX.read(buffer, { type: 'buffer' })
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
       name, phone, position, outlet,
       source: 'import',
       import_batch_id: batch.id,
+      applied_job_id: jobPostingId,
     }).select('id').single()
     if (!error && inserted) {
       imported++

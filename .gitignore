@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local git worktree scratch space (superpowers plan-driven-development)
+.worktrees/

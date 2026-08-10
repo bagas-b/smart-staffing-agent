@@ -8,7 +8,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
   const { data, error } = await supabase
     .from('job_postings')
-    .select('*')
+    .select('*, candidates!applied_job_id(id, name, status, position, outlet, candidate_scores(cv_fit_score, hire_success_probability, scoring_reasoning))')
     .eq('id', id)
     .eq('company_id', COMPANY_ID)
     .single()

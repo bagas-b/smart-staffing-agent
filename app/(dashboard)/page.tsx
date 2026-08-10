@@ -3,7 +3,6 @@ import { StatCard } from '@/components/dashboard/StatCard'
 import { AgentLogFeed } from '@/components/dashboard/AgentLogFeed'
 import { ActionPanel } from '@/components/dashboard/ActionPanel'
 import { RecommendationPanel } from '@/components/dashboard/RecommendationPanel'
-import { PipelineSummary } from '@/components/dashboard/PipelineSummary'
 import { Users, Clock, AlertTriangle, CheckSquare, TrendingUp, Activity } from 'lucide-react'
 
 async function getDashboardData() {
@@ -50,9 +49,7 @@ export default async function DashboardPage() {
         <StatCard label="Menunggu Approval" value={stats.pendingApproval} color="#7c3aed" icon={CheckSquare} href="/approval" />
       </div>
 
-      <PipelineSummary candidates={stats.candidateStatuses} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ActionPanel />
         <RecommendationPanel />
       </div>

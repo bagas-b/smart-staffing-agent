@@ -27,7 +27,11 @@ export async function callClaude(
     throw new Error(`Anthropic API error ${res.status}: ${err}`)
   }
 
-  const data = await res.json()
+  // Proxy appends `data: [DONE]` to non-streaming responses; extract JSON before parsing
+  const raw = await res.text()
+  const jsonMatch = raw.match(/\{[\s\S]+\}/)
+  if (!jsonMatch) throw new Error(`Unparseable response: ${raw.slice(0, 200)}`)
+  const data = JSON.parse(jsonMatch[0])
   const text = data?.content?.[0]?.text
   if (typeof text !== 'string') throw new Error(`Unexpected Anthropic response shape: ${JSON.stringify(data)}`)
   return text
