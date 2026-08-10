@@ -24,7 +24,10 @@ export async function GET() {
 
   const conversations = (data ?? [])
     .map(c => {
-      const messages = (c.candidate_messages ?? []) as RawMessage[]
+      // Drafts aren't real conversation yet — they haven't been approved/sent,
+      // so they shouldn't make a candidate show up in the inbox or count as
+      // the "last message".
+      const messages = ((c.candidate_messages ?? []) as RawMessage[]).filter(m => m.direction !== 'draft')
       if (messages.length === 0) return null
       const sorted = [...messages].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       const last = sorted[0]

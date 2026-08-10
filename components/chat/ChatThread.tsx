@@ -96,7 +96,11 @@ export function ChatThread({ candidateId, onSent }: { candidateId: string | null
     )
   }
 
+  // Drafts haven't been approved/sent yet — don't render them in the thread
+  // as if they were (MessageBubble would show a non-'outbound' draft on the
+  // candidate's side, which is backwards and misleading).
   const messages = [...(current?.candidate_messages ?? [])]
+    .filter(m => m.direction !== 'draft')
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 
   const hasTelegram = !!current?.telegram_chat_id
