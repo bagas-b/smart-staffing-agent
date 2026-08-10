@@ -9,7 +9,14 @@ async function getDrafts() {
     .eq('company_id', process.env.COMPANY_ID!)
     .eq('direction', 'draft')
     .order('created_at', { ascending: true })
-  return data ?? []
+
+  // Supabase's untyped client infers the to-one `candidates` embed as an array;
+  // at runtime it's a single object (candidate_messages.candidate_id -> candidates.id
+  // is many-to-one). Normalize defensively so it matches ApprovalQueue's Draft type.
+  return (data ?? []).map(row => ({
+    ...row,
+    candidates: Array.isArray(row.candidates) ? row.candidates[0] ?? null : row.candidates,
+  }))
 }
 
 export default async function ApprovalPage() {
