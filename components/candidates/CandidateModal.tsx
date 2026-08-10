@@ -12,6 +12,7 @@ import { ExternalLink, RefreshCw, Phone, Mail, User, MapPin, Briefcase } from 'l
 import { MessageBubble } from '@/components/shared/MessageBubble'
 import { TelegramLinkStatus } from '@/components/shared/TelegramLinkStatus'
 import { HireSection } from './HireSection'
+import { InterviewSection } from './InterviewSection'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,13 @@ interface ScoreReasoning {
   confidence?: string
 }
 
+interface Decision {
+  id: string
+  decision: 'lulus' | 'tidak_lulus'
+  notes: string | null
+  decided_at: string
+}
+
 interface Candidate {
   id: string
   name: string
@@ -72,7 +80,9 @@ interface Candidate {
   source?: string | null
   cv_url?: string | null
   telegram_chat_id?: string | null
+  interview_scheduled_at?: string | null
   candidate_messages?: Message[]
+  candidate_decisions?: Decision[]
   job_postings?: { id: string; title: string; position: string; outlet: string | null; status: string } | null
 }
 
@@ -258,13 +268,15 @@ export function CandidateModal({ candidateId, onClose, snapshot }: CandidateModa
   // candidate doesn't match the one currently requested.
   const fetching = !!candidateId && candidate?.id !== candidateId
 
-  useEffect(() => {
+  const refetchCandidate = useCallback(() => {
     if (!candidateId) return
     fetch(`/api/candidates/${candidateId}`)
       .then(r => r.json())
       .then(data => setCandidate(data))
       .catch(() => {})
   }, [candidateId])
+
+  useEffect(() => { refetchCandidate() }, [refetchCandidate])
 
   const open = !!candidateId
   // Only trust `candidate` once it actually matches the requested id — otherwise it's
@@ -387,6 +399,17 @@ export function CandidateModal({ candidateId, onClose, snapshot }: CandidateModa
               <span className="font-semibold text-amber-700">Catatan HR: </span>
               <span className="text-gray-700">{current.notes}</span>
             </div>
+          )}
+
+          {/* Interview scheduling & decision */}
+          {!fetching && current && (
+            <InterviewSection
+              candidateId={current.id}
+              status={current.status}
+              interviewScheduledAt={current.interview_scheduled_at ?? null}
+              decisions={current.candidate_decisions ?? []}
+              onChanged={refetchCandidate}
+            />
           )}
 
           {/* Onboarding & Performance */}

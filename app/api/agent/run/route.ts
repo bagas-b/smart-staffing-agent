@@ -48,6 +48,8 @@ export async function POST(req: NextRequest) {
         await processDraftFollowUpTask(supabase, task)
       } else if (task.type === 'draft_initial_outreach') {
         await processInitialOutreachTask(supabase, task)
+      } else if (task.type === 'draft_interview_invite') {
+        await processInterviewInviteTask(supabase, task)
       } else {
         throw new Error(`unknown task type: ${task.type}`)
       }
@@ -363,6 +365,70 @@ Tulis hanya isi pesannya saja, tanpa label atau penjelasan tambahan.`
     company_id: COMPANY_ID,
     type: 'ai',
     message: `Draft pesan pertama dibuat untuk ${candidate.name} (menunggu approval)`,
+    metadata: { candidate_id },
+  })
+
+  await supabase.from('agent_tasks').update({
+    status: 'done',
+    processed_at: new Date().toISOString(),
+  }).eq('id', task.id)
+}
+
+async function processInterviewInviteTask(
+  supabase: ReturnType<typeof createServiceClient>,
+  task: { id: string; payload: { candidate_id?: string } },
+) {
+  const { candidate_id } = task.payload
+  if (!candidate_id) throw new Error('missing candidate_id in payload')
+
+  const { data: candidate } = await supabase
+    .from('candidates')
+    .select('id, name, position, outlet, phone, telegram_chat_id, interview_scheduled_at')
+    .eq('id', candidate_id)
+    .eq('company_id', COMPANY_ID)
+    .single()
+
+  if (!candidate) throw new Error(`candidate ${candidate_id} not found`)
+  if (!candidate.interview_scheduled_at) throw new Error('candidate has no interview_scheduled_at set')
+
+  const channel = candidate.telegram_chat_id ? 'telegram' : candidate.phone ? 'wa' : null
+  if (!channel) throw new Error('candidate has no phone number or linked Telegram to contact')
+
+  const scheduledLabel = new Date(candidate.interview_scheduled_at).toLocaleString('id-ID', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+
+  const prompt = `Buatkan pesan undangan interview untuk kandidat recruitment.
+
+Nama kandidat: ${candidate.name}
+Posisi: ${candidate.position ?? 'Staff'}
+Outlet: ${candidate.outlet ?? 'Greenly Cloud Kitchen'}
+Jadwal interview: ${scheduledLabel} WIB
+
+Pesan harus:
+- Singkat dan jelas (maks 3 paragraf)
+- Menyebutkan nama kandidat dan ucapan selamat karena lolos ke tahap interview
+- Menyebutkan jadwal interview (hari, tanggal, jam) dengan jelas
+- Meminta konfirmasi kehadiran, dan minta datang/standby 10 menit lebih awal
+- Bahasa Indonesia yang ramah dan profesional, tidak terlalu formal
+
+Tulis hanya isi pesannya saja, tanpa label atau penjelasan tambahan.`
+
+  const draftText = await callClaude([{ role: 'user', content: prompt }])
+
+  await supabase.from('candidate_messages').insert({
+    candidate_id,
+    company_id: COMPANY_ID,
+    direction: 'draft',
+    channel,
+    content: draftText.trim(),
+    sent_by: 'agent',
+  })
+
+  await supabase.from('agent_logs').insert({
+    company_id: COMPANY_ID,
+    type: 'ai',
+    message: `Draft undangan interview dibuat untuk ${candidate.name} (menunggu approval)`,
     metadata: { candidate_id },
   })
 
