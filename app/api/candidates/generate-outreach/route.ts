@@ -9,6 +9,11 @@ const COMPANY_ID = process.env.COMPANY_ID!
  * add). Candidates who slipped through that (imported before the feature existed,
  * had no phone yet at creation time, etc.) never get a draft on their own. This
  * lets HR sweep the backlog on demand instead of needing a recurring cron for it.
+ *
+ * Also doubles as a manual "un-stick the queue" button: if a previous batch
+ * queued more tasks than /api/agent/run processes in one call, the leftovers
+ * sit at status='pending' forever with nothing else to nudge them — clicking
+ * this always re-triggers a run so that backlog gets a chance to drain too.
  */
 export async function POST(req: NextRequest) {
   const supabase = createServiceClient()
@@ -28,40 +33,45 @@ export async function POST(req: NextRequest) {
 
   const { data: candidates, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!candidates?.length) return NextResponse.json({ enqueued: 0, skipped: 0 })
 
-  // Don't double-queue candidates that already have an outreach task in any
-  // status (pending/processing/done/needs_review/failed) — one attempt already
-  // exists for them.
   const { data: existingTasks } = await supabase
     .from('agent_tasks')
-    .select('payload')
+    .select('status, payload')
     .eq('company_id', COMPANY_ID)
     .eq('type', 'draft_initial_outreach')
 
-  const alreadyQueued = new Set(
+  const taskStatusByCandidate = new Map(
     (existingTasks ?? [])
-      .map(t => (t.payload as { candidate_id?: string } | null)?.candidate_id)
-      .filter((id): id is string => !!id)
+      .map(t => [(t.payload as { candidate_id?: string } | null)?.candidate_id, t.status])
+      .filter(([id]) => !!id) as [string, string][]
   )
 
-  const toEnqueue = candidates.filter(c => !alreadyQueued.has(c.id))
-  const skipped = candidates.length - toEnqueue.length
-  if (toEnqueue.length === 0) return NextResponse.json({ enqueued: 0, skipped })
+  const toEnqueue = (candidates ?? []).filter(c => !taskStatusByCandidate.has(c.id))
+  const statusCounts = { pending: 0, processing: 0, done: 0, needs_review: 0, failed: 0 }
+  for (const status of taskStatusByCandidate.values()) {
+    if (status in statusCounts) statusCounts[status as keyof typeof statusCounts]++
+  }
 
-  await supabase.from('agent_tasks').insert(
-    toEnqueue.map(c => ({
-      company_id: COMPANY_ID,
-      type: 'draft_initial_outreach',
-      payload: { candidate_id: c.id },
-    }))
-  )
+  if (toEnqueue.length > 0) {
+    await supabase.from('agent_tasks').insert(
+      toEnqueue.map(c => ({
+        company_id: COMPANY_ID,
+        type: 'draft_initial_outreach',
+        payload: { candidate_id: c.id },
+      }))
+    )
+  }
 
+  // Always trigger — even with nothing new to enqueue, this is also how a
+  // stranded pending/failed backlog from a previous run gets another chance.
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
   fetch(`${baseUrl}/api/agent/run`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
   }).catch(() => {})
 
-  return NextResponse.json({ enqueued: toEnqueue.length, skipped })
+  return NextResponse.json({
+    enqueued: toEnqueue.length,
+    ...statusCounts,
+  })
 }

@@ -61,11 +61,15 @@ export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Ca
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Gagal generate outreach')
-      setOutreachMessage(
-        data.enqueued === 0
-          ? (data.skipped > 0 ? `Semua ${data.skipped} kandidat sudah punya draft sebelumnya.` : 'Tidak ada kandidat dengan nomor WA di kolom ini.')
-          : `${data.enqueued} draft outreach dibuat — cek menu Approval.`
-      )
+
+      const parts: string[] = []
+      if (data.enqueued > 0) parts.push(`${data.enqueued} draft baru dibuat`)
+      if (data.pending > 0 || data.processing > 0) parts.push(`${data.pending + data.processing} sedang diproses agent (coba klik lagi sebentar lagi kalau belum muncul)`)
+      if (data.done > 0) parts.push(`${data.done} sudah pernah dibuatkan draft sebelumnya — cek riwayat pesan di kartu kandidatnya`)
+      if (data.needs_review > 0) parts.push(`${data.needs_review} perlu direview manual`)
+      if (data.failed > 0) parts.push(`${data.failed} gagal sebelumnya (cek Aktivitas Agent untuk detail error)`)
+
+      setOutreachMessage(parts.length > 0 ? parts.join(' · ') + '.' : 'Tidak ada kandidat dengan nomor WA di kolom ini.')
       router.refresh()
     } catch (e: unknown) {
       setOutreachMessage(e instanceof Error ? e.message : 'Gagal generate outreach')

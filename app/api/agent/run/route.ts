@@ -3,7 +3,11 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { callClaude } from '@/lib/ai/client'
 
 const COMPANY_ID = process.env.COMPANY_ID!
-const MAX_TASKS_PER_RUN = 10
+const MAX_TASKS_PER_RUN = 40
+// Sequential AI calls across up to 40 tasks can take a while — give this route
+// the most headroom Vercel Hobby allows (default would be far too short and
+// silently strand the tail of a batch as 'pending' with no error, no retry).
+export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -13,11 +17,16 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
+  // Also reclaim tasks stuck at 'processing' for >10 minutes — the previous
+  // run's function almost certainly got killed (timeout, cold-start eviction)
+  // mid-task, and nothing else ever revisits 'processing' rows since only
+  // 'pending' is queried here by default.
+  const staleThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString()
   const { data: tasks } = await supabase
     .from('agent_tasks')
     .select('*')
     .eq('company_id', COMPANY_ID)
-    .eq('status', 'pending')
+    .or(`status.eq.pending,and(status.eq.processing,created_at.lt.${staleThreshold})`)
     .order('created_at')
     .limit(MAX_TASKS_PER_RUN)
 
