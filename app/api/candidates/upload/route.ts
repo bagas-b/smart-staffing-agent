@@ -37,12 +37,14 @@ export async function POST(req: NextRequest) {
   for (const row of rows) {
     const name = pick(row, 'name', 'nama', 'Name', 'Nama')
     const phone = pick(row, 'phone', 'nomor', 'wa', 'Phone', 'Nomor', 'WA')
+    const email = pick(row, 'email', 'Email')
     const position = pick(row, 'position', 'posisi', 'Position', 'Posisi')
     const outlet = pick(row, 'outlet', 'Outlet')
+    const notes = pick(row, 'notes', 'catatan', 'Notes', 'Catatan')
     if (!name) continue
     const { data: inserted, error } = await supabase.from('candidates').insert({
       company_id: COMPANY_ID,
-      name, phone, position, outlet,
+      name, phone, email, position, outlet, notes,
       source: 'import',
       import_batch_id: batch.id,
       applied_job_id: jobPostingId,

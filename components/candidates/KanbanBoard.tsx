@@ -2,6 +2,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CandidateModal } from './CandidateModal'
+import { AddCandidateModal } from './AddCandidateModal'
+import { CandidateUploadForm } from './CandidateUploadForm'
+import { Button } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
 
 interface CandidateScore {
   hire_success_probability: number
@@ -41,6 +45,7 @@ function TierBadge({ score }: { score: CandidateScore | undefined | null }) {
 export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Candidate[]; initialCandidateId?: string }) {
   const router = useRouter()
   const [selectedId, setSelectedId] = useState<string | null>(initialCandidateId ?? null)
+  const [addingOpen, setAddingOpen] = useState(false)
   const selectedCandidate = selectedId ? candidates.find(c => c.id === selectedId) : null
 
   // Re-fetch server data on close (candidate status may have changed — hire,
@@ -53,6 +58,18 @@ export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Ca
 
   return (
     <>
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="text-xl font-semibold text-gray-800">
+          Kandidat <span className="text-gray-400 font-normal text-base">({candidates.length})</span>
+        </h1>
+        <div className="flex gap-2">
+          <CandidateUploadForm />
+          <Button onClick={() => setAddingOpen(true)} className="bg-[#1E3A2F] hover:bg-[#2d5242] gap-2">
+            <Plus size={16} /> Tambah Kandidat
+          </Button>
+        </div>
+      </div>
+
       {/* Board — columns stretch to fill available width, scroll horizontally only when they don't fit */}
       <div className="flex gap-3 overflow-x-auto pb-3 min-h-0" style={{ maxHeight: 'calc(100vh - 200px)' }}>
         {PIPELINE.map(col => {
@@ -99,7 +116,7 @@ export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Ca
         })}
       </div>
 
-      {/* Modal */}
+      {/* Modals */}
       <CandidateModal
         candidateId={selectedId}
         onClose={closeModal}
@@ -109,6 +126,11 @@ export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Ca
           position: selectedCandidate.position,
           outlet: selectedCandidate.outlet,
         } : undefined}
+      />
+      <AddCandidateModal
+        open={addingOpen}
+        onClose={() => setAddingOpen(false)}
+        onCreated={() => router.refresh()}
       />
     </>
   )
