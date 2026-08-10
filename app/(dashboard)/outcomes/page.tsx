@@ -20,22 +20,27 @@ function toOne<T>(value: T | T[] | null | undefined): T | null {
 async function getOutcomes() {
   const supabase = createServiceClient()
 
+  // Fire every independent query in one batch — sequential separate awaits
+  // (even reusing the same client) were each paying a full connection-latency
+  // hit on this Vercel/Supabase pairing, stacking to 20s+ per page load.
   const [
     { count: outreach },
     { count: response },
     { count: interview },
     { count: hired },
+    { data: perfData },
+    { data: hireRows },
   ] = await Promise.all([
     supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('company_id', COMPANY_ID).neq('status', 'belum_dihubungi'),
     supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('company_id', COMPANY_ID).in('status', ['tertarik', 'butuh_info', 'interview_dijadwalkan', 'lulus_interview', 'onboarding', 'aktif']),
     supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('company_id', COMPANY_ID).in('status', ['interview_dijadwalkan', 'lulus_interview', 'onboarding', 'aktif']),
     supabase.from('candidate_hire_records').select('*', { count: 'exact', head: true }).eq('company_id', COMPANY_ID),
+    supabase.from('candidate_performance').select('day_1_checkin, day_30_status, performance_rating').eq('company_id', COMPANY_ID),
+    supabase.from('candidate_hire_records')
+      .select('id, candidate_id, hired_date, start_date, first_day_attended, candidates(id, name, position, outlet), candidate_performance(day_7_status, day_30_status, resign_date, resign_reason)')
+      .eq('company_id', COMPANY_ID)
+      .order('hired_date', { ascending: false }),
   ])
-
-  const { data: perfData } = await supabase
-    .from('candidate_performance')
-    .select('day_1_checkin, day_30_status, performance_rating')
-    .eq('company_id', COMPANY_ID)
 
   const perf = perfData ?? []
   const firstDayRate = perf.length > 0
@@ -49,13 +54,6 @@ async function getOutcomes() {
   const avgRating = ratings.length > 0
     ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
     : null
-
-  // Hire records + candidate + performance, for the check-in / attrition sections below.
-  const { data: hireRows } = await supabase
-    .from('candidate_hire_records')
-    .select('id, candidate_id, hired_date, start_date, first_day_attended, candidates(id, name, position, outlet), candidate_performance(day_7_status, day_30_status, resign_date, resign_reason)')
-    .eq('company_id', COMPANY_ID)
-    .order('hired_date', { ascending: false })
 
   const pendingCheckins: PendingCheckin[] = []
   const resigned: ResignEntry[] = []

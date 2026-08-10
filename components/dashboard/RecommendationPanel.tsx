@@ -1,7 +1,6 @@
-import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 
-type ScoredCandidate = {
+export type ScoredCandidate = {
   candidate_id: string
   hire_success_probability: number
   cv_fit_score: number
@@ -18,26 +17,6 @@ type ScoredCandidate = {
   } | null
 }
 
-async function getTopCandidates(): Promise<ScoredCandidate[]> {
-  const supabase = createServiceClient()
-  const companyId = process.env.COMPANY_ID!
-
-  const { data } = await supabase
-    .from('candidate_scores')
-    .select(`
-      candidate_id,
-      hire_success_probability,
-      cv_fit_score,
-      scoring_reasoning,
-      candidates!inner(id, name, position, outlet)
-    `)
-    .eq('company_id', companyId)
-    .order('hire_success_probability', { ascending: false })
-    .limit(5)
-
-  return (data ?? []) as unknown as ScoredCandidate[]
-}
-
 function TierBadge({ prob, confidence }: { prob: number; confidence?: string }) {
   const isLow = confidence === 'low'
   if (prob >= 70 && !isLow) return <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-800">Prioritas</span>
@@ -45,9 +24,7 @@ function TierBadge({ prob, confidence }: { prob: number; confidence?: string }) 
   return <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-800">Perlu Review</span>
 }
 
-export async function RecommendationPanel() {
-  const candidates = await getTopCandidates()
-
+export function RecommendationPanel({ candidates }: { candidates: ScoredCandidate[] }) {
   return (
     <div className="bg-white rounded-lg border shadow-sm">
       <div className="px-5 py-3 border-b">
