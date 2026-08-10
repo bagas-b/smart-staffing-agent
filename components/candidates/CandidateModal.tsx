@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { ExternalLink, RefreshCw, Phone, Mail, User, MapPin, Briefcase } from 'lucide-react'
 import { MessageBubble } from '@/components/shared/MessageBubble'
 import { TelegramLinkStatus } from '@/components/shared/TelegramLinkStatus'
+import { HireSection } from './HireSection'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -387,6 +388,9 @@ export function CandidateModal({ candidateId, onClose, snapshot }: CandidateModa
               <span className="text-gray-700">{current.notes}</span>
             </div>
           )}
+
+          {/* Onboarding & Performance */}
+          {!fetching && candidateId && <HireSection candidateId={candidateId} />}
 
           {/* AI Analysis */}
           {!fetching && candidateId && <ScoreSection candidateId={candidateId} />}
