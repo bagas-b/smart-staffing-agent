@@ -1,10 +1,10 @@
 import { NextResponse, NextRequest } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth/require-user'
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const authError = await requireUser()
+  if (authError) return authError
 
   const { id } = await req.json()
   const serviceSupabase = createServiceClient()
