@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { callClaude } from '@/lib/ai/client'
+import { dispatchDraft } from '@/lib/approval/dispatch'
 
 const COMPANY_ID = process.env.COMPANY_ID!
 const MAX_TASKS_PER_RUN = 40
@@ -184,9 +185,16 @@ Jawab HANYA dalam format JSON:
   // candidate isn't left hanging — previously only 'butuh_info' did, which
   // meant candidates who replied "tertarik" or "tidak tertarik" got their
   // kanban status silently moved with zero acknowledgment sent back to them.
-  // Drafts still flow through the normal approval queue like every other
-  // agent-authored message; nothing here sends unsupervised.
+  // 'tertarik'/'tidak_tertarik' replies are lightweight conversational
+  // acknowledgments (thank-you / polite decline) with no factual claims —
+  // those auto-send immediately, customer-service-bot style, no HR approval
+  // needed. 'butuh_info' replies quote real salary/job details back to the
+  // candidate, so a wrong or stale answer is a promise that already went out;
+  // those still queue as a draft for HR to check before sending. Anything
+  // substantive (follow-up nudges, interview scheduling, interview
+  // invitations) is a separate task type entirely and always drafts.
   let replyPrompt: string | null = null
+  let autoSend = false
 
   if (parsed.classification === 'butuh_info') {
     const { data: job } = await supabase
@@ -206,6 +214,7 @@ ${job ? `Gaji: ${job.salary_range ?? 'kompetitif'}\nDeskripsi singkat: ${(job.de
 
 Buat pesan yang ramah, informatif, dalam Bahasa Indonesia. Kembalikan hanya teks pesan.`
   } else if (parsed.classification === 'tertarik') {
+    autoSend = true
     replyPrompt = `Tulis pesan balasan singkat (maks 3 kalimat) untuk kandidat yang baru saja menyatakan tertarik dengan lowongan kerja.
 
 Kandidat: ${candidate?.name ?? 'Kandidat'}
@@ -214,6 +223,7 @@ Outlet: ${candidate?.outlet ?? '-'}
 
 Pesan harus: ucapkan terima kasih atas ketertarikannya, jelaskan bahwa tim HR akan segera menghubungi untuk jadwal interview, nada ramah dan profesional dalam Bahasa Indonesia. Kembalikan hanya teks pesan.`
   } else if (parsed.classification === 'tidak_tertarik') {
+    autoSend = true
     replyPrompt = `Tulis pesan balasan singkat (maks 2-3 kalimat) untuk kandidat yang menyatakan tidak tertarik/menolak lowongan kerja.
 
 Kandidat: ${candidate?.name ?? 'Kandidat'}
@@ -225,19 +235,29 @@ Pesan harus: ucapkan terima kasih sudah meluangkan waktu, sampaikan pintu tetap 
   if (replyPrompt) {
     const draftText = await callClaude([{ role: 'user', content: replyPrompt }])
 
-    await supabase.from('candidate_messages').insert({
+    const { data: inserted } = await supabase.from('candidate_messages').insert({
       candidate_id,
       company_id: COMPANY_ID,
       direction: 'draft',
       channel: replyChannel,
       content: draftText.trim(),
       sent_by: 'agent',
-    })
+    }).select('id').single()
+
+    // Auto-send path: dispatch immediately through the same send logic HR's
+    // "Setujui" button uses. On failure it deliberately leaves direction
+    // as 'draft' (dispatchDraft's own contract), so a failed auto-send just
+    // falls back into the approval queue instead of vanishing.
+    const sent = autoSend && inserted ? await dispatchDraft(supabase, inserted.id) : null
 
     await supabase.from('agent_logs').insert({
       company_id: COMPANY_ID,
-      type: 'ai',
-      message: `Draft balasan otomatis dibuat untuk ${candidate?.name ?? 'kandidat'} (menunggu approval)`,
+      type: sent ? (sent.ok ? 'success' : 'error') : 'ai',
+      message: sent
+        ? sent.ok
+          ? `Balasan otomatis terkirim ke ${candidate?.name ?? 'kandidat'} (tanpa approval HR — konfirmasi minat)`
+          : `Auto-kirim balasan ke ${candidate?.name ?? 'kandidat'} gagal (${sent.error}) — disimpan sebagai draft untuk approval manual`
+        : `Draft balasan otomatis dibuat untuk ${candidate?.name ?? 'kandidat'} (menunggu approval)`,
       metadata: { candidate_id },
     })
   }
