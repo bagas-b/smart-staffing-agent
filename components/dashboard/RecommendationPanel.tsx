@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { TelegramBadge } from '@/components/shared/TelegramBadge'
 
 export type ScoredCandidate = {
   candidate_id: string
@@ -14,6 +15,7 @@ export type ScoredCandidate = {
     name: string
     position: string | null
     outlet: string | null
+    telegram_chat_id: string | null
   } | null
 }
 
@@ -42,6 +44,7 @@ export function RecommendationPanel({ candidates }: { candidates: ScoredCandidat
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-gray-800">{c.candidates?.name}</span>
                   <TierBadge prob={c.hire_success_probability} confidence={reasoning?.confidence} />
+                  {c.candidates?.telegram_chat_id && <TelegramBadge />}
                 </div>
                 <p className="text-xs text-gray-500">
                   {c.candidates?.position ?? '-'} · {c.candidates?.outlet ?? '-'} · Skor: {c.hire_success_probability}

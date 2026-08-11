@@ -6,6 +6,7 @@ import { AddCandidateModal } from './AddCandidateModal'
 import { CandidateUploadForm } from './CandidateUploadForm'
 import { Button } from '@/components/ui/button'
 import { Plus, Send } from 'lucide-react'
+import { TelegramBadge } from '@/components/shared/TelegramBadge'
 
 interface CandidateScore {
   hire_success_probability: number
@@ -18,6 +19,7 @@ interface Candidate {
   status: string
   position?: string | null
   outlet?: string | null
+  telegram_chat_id?: string | null
   candidate_scores?: Array<CandidateScore> | null
 }
 
@@ -148,9 +150,10 @@ export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Ca
                     {c.outlet && (
                       <p className="text-[11px] text-gray-400 truncate">{c.outlet}</p>
                     )}
-                    {c.candidate_scores?.[0] && (
-                      <div className="mt-1">
-                        <TierBadge score={c.candidate_scores[0]} />
+                    {(c.candidate_scores?.[0] || c.telegram_chat_id) && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <TierBadge score={c.candidate_scores?.[0]} />
+                        {c.telegram_chat_id && <TelegramBadge />}
                       </div>
                     )}
                   </button>

@@ -1,4 +1,5 @@
 import { Send, MessageCircle } from 'lucide-react'
+import { TelegramBadge } from '@/components/shared/TelegramBadge'
 
 export interface Conversation {
   candidateId: string
@@ -61,6 +62,9 @@ export function ChatInbox({ conversations, selectedId, onSelect }: ChatInboxProp
                 </p>
                 <span className="text-[10px] text-gray-400 flex-shrink-0">{timeAgo(c.lastMessageAt)}</span>
               </div>
+              {c.telegramLinked && (
+                <div className="mt-1"><TelegramBadge /></div>
+              )}
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Icon size={11} className="text-gray-400 flex-shrink-0" />
                 <p className={`text-xs truncate ${c.unread ? 'text-gray-700' : 'text-gray-400'}`}>

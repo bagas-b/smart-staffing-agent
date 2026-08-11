@@ -9,7 +9,7 @@ async function getDrafts() {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('candidate_messages')
-    .select('id, content, channel, created_at, candidate_id, candidates(name, position, outlet)')
+    .select('id, content, channel, created_at, candidate_id, candidates(name, position, outlet, telegram_chat_id)')
     .eq('company_id', process.env.COMPANY_ID!)
     .eq('direction', 'draft')
     .order('created_at', { ascending: true })

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { ExternalLink, RefreshCw, Phone, Mail, User, MapPin, Briefcase } from 'lucide-react'
 import { MessageBubble } from '@/components/shared/MessageBubble'
 import { TelegramLinkStatus } from '@/components/shared/TelegramLinkStatus'
+import { TelegramBadge } from '@/components/shared/TelegramBadge'
 import { HireSection } from './HireSection'
 import { InterviewSection } from './InterviewSection'
 
@@ -311,6 +312,7 @@ export function CandidateModal({ candidateId, onClose, snapshot }: CandidateModa
                     {STATUS_LABELS[status] ?? status}
                   </span>
                 )}
+                {current?.telegram_chat_id && <TelegramBadge />}
                 {position && (
                   <span className="flex items-center gap-1 text-xs text-gray-500">
                     <Briefcase size={11} /> {position}

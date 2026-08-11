@@ -180,8 +180,15 @@ Jawab HANYA dalam format JSON:
     .eq('id', candidate_id)
     .eq('company_id', COMPANY_ID)
 
+  // Every recognized classification gets an auto-drafted reply so the
+  // candidate isn't left hanging — previously only 'butuh_info' did, which
+  // meant candidates who replied "tertarik" or "tidak tertarik" got their
+  // kanban status silently moved with zero acknowledgment sent back to them.
+  // Drafts still flow through the normal approval queue like every other
+  // agent-authored message; nothing here sends unsupervised.
+  let replyPrompt: string | null = null
+
   if (parsed.classification === 'butuh_info') {
-    // Fetch job info for context
     const { data: job } = await supabase
       .from('job_postings')
       .select('title, salary_range, description')
@@ -190,7 +197,7 @@ Jawab HANYA dalam format JSON:
       .limit(1)
       .single()
 
-    const infoPrompt = `Tulis pesan balasan WhatsApp singkat (maks 3 kalimat) untuk kandidat yang meminta info lebih lanjut tentang posisi kerja.
+    replyPrompt = `Tulis pesan balasan WhatsApp singkat (maks 3 kalimat) untuk kandidat yang meminta info lebih lanjut tentang posisi kerja.
 
 Kandidat: ${candidate?.name ?? 'Kandidat'}
 Posisi: ${candidate?.position ?? '-'}
@@ -198,8 +205,25 @@ Outlet: ${candidate?.outlet ?? '-'}
 ${job ? `Gaji: ${job.salary_range ?? 'kompetitif'}\nDeskripsi singkat: ${(job.description ?? '').slice(0, 200)}` : ''}
 
 Buat pesan yang ramah, informatif, dalam Bahasa Indonesia. Kembalikan hanya teks pesan.`
+  } else if (parsed.classification === 'tertarik') {
+    replyPrompt = `Tulis pesan balasan singkat (maks 3 kalimat) untuk kandidat yang baru saja menyatakan tertarik dengan lowongan kerja.
 
-    const draftText = await callClaude([{ role: 'user', content: infoPrompt }])
+Kandidat: ${candidate?.name ?? 'Kandidat'}
+Posisi: ${candidate?.position ?? '-'}
+Outlet: ${candidate?.outlet ?? '-'}
+
+Pesan harus: ucapkan terima kasih atas ketertarikannya, jelaskan bahwa tim HR akan segera menghubungi untuk jadwal interview, nada ramah dan profesional dalam Bahasa Indonesia. Kembalikan hanya teks pesan.`
+  } else if (parsed.classification === 'tidak_tertarik') {
+    replyPrompt = `Tulis pesan balasan singkat (maks 2-3 kalimat) untuk kandidat yang menyatakan tidak tertarik/menolak lowongan kerja.
+
+Kandidat: ${candidate?.name ?? 'Kandidat'}
+Posisi: ${candidate?.position ?? '-'}
+
+Pesan harus: ucapkan terima kasih sudah meluangkan waktu, sampaikan pintu tetap terbuka untuk kesempatan lain di masa depan, nada sopan dan tidak memaksa dalam Bahasa Indonesia. Kembalikan hanya teks pesan.`
+  }
+
+  if (replyPrompt) {
+    const draftText = await callClaude([{ role: 'user', content: replyPrompt }])
 
     await supabase.from('candidate_messages').insert({
       candidate_id,
@@ -208,6 +232,13 @@ Buat pesan yang ramah, informatif, dalam Bahasa Indonesia. Kembalikan hanya teks
       channel: replyChannel,
       content: draftText.trim(),
       sent_by: 'agent',
+    })
+
+    await supabase.from('agent_logs').insert({
+      company_id: COMPANY_ID,
+      type: 'ai',
+      message: `Draft balasan otomatis dibuat untuk ${candidate?.name ?? 'kandidat'} (menunggu approval)`,
+      metadata: { candidate_id },
     })
   }
 

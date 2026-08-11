@@ -3,6 +3,7 @@ import { MessageHistory } from '@/components/candidates/MessageHistory'
 import { Badge } from '@/components/ui/badge'
 import { notFound } from 'next/navigation'
 import { ScoreCard } from '@/components/candidates/ScoreCard'
+import { TelegramBadge } from '@/components/shared/TelegramBadge'
 
 const STATUS_LABELS: Record<string, string> = {
   belum_dihubungi: 'Belum Dihubungi',
@@ -46,7 +47,10 @@ export default async function CandidateDetailPage({ params }: { params: Promise<
           <h1 className="text-xl font-semibold">{candidate.name}</h1>
           <p className="text-sm text-gray-500">{candidate.phone}</p>
         </div>
-        <Badge variant="outline">{STATUS_LABELS[candidate.status] ?? candidate.status}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{STATUS_LABELS[candidate.status] ?? candidate.status}</Badge>
+          {candidate.telegram_chat_id && <TelegramBadge />}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-sm">
