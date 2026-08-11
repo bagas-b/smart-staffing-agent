@@ -30,7 +30,9 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login')
-  const isPublicRoute = request.nextUrl.pathname.startsWith('/jobs') ||
+  const isPublicRoute = request.nextUrl.pathname === '/' ||
+    request.nextUrl.pathname.startsWith('/jobs') ||
+    request.nextUrl.pathname.startsWith('/careers') ||
     request.nextUrl.pathname.startsWith('/api/')
 
   if (!user && !isAuthRoute && !isPublicRoute) {
@@ -38,7 +40,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (user && isAuthRoute) {
-    return NextResponse.redirect(new URL('/', request.url))
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return supabaseResponse

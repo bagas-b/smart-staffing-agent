@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Users, Briefcase, MessageSquare, LayoutDashboard, LogOut, BarChart2, CheckSquare } from 'lucide-react'
 
 const navItems = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/candidates', label: 'Kandidat', icon: Users },
   { href: '/jobs', label: 'Job Posting', icon: Briefcase },
   { href: '/messages', label: 'Chat', icon: MessageSquare },
