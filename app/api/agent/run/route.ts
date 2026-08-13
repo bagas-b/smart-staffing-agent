@@ -113,7 +113,10 @@ async function processScoreTask(
 
   await supabase.from('agent_logs').insert({
     company_id: COMPANY_ID,
-    type: finalStatus === 'needs_review' ? 'info' : 'ai',
+    // 'ai' is not a valid agent_logs.type (DB check constraint only allows
+    // success/info/warning/error) — using it here silently drops the insert
+    // (23514 violation, never surfaced since the error isn't checked).
+    type: finalStatus === 'needs_review' ? 'info' : 'success',
     message: finalStatus === 'needs_review'
       ? `${candidate?.name ?? 'Kandidat'} di-score tapi confidence rendah — perlu direview manual`
       : `${candidate?.name ?? 'Kandidat'} berhasil di-score (${result.hire_success_probability}% prob. hire)`,
@@ -252,7 +255,8 @@ Pesan harus: ucapkan terima kasih sudah meluangkan waktu, sampaikan pintu tetap 
 
     await supabase.from('agent_logs').insert({
       company_id: COMPANY_ID,
-      type: sent ? (sent.ok ? 'success' : 'error') : 'ai',
+      // 'ai' is not a valid agent_logs.type (see note in processScoreTask above).
+      type: sent ? (sent.ok ? 'success' : 'error') : 'info',
       message: sent
         ? sent.ok
           ? `Balasan otomatis terkirim ke ${candidate?.name ?? 'kandidat'} (tanpa approval HR — konfirmasi minat)`
@@ -337,7 +341,7 @@ Tulis langsung isi pesannya saja, tanpa label atau penjelasan tambahan.`
 
   await supabase.from('agent_logs').insert({
     company_id: COMPANY_ID,
-    type: 'ai',
+    type: 'info', // 'ai' is not a valid agent_logs.type — see note above
     message: `Draft follow-up dibuat untuk ${candidate.name} (menunggu approval)`,
     metadata: { candidate_id },
   })
@@ -414,7 +418,7 @@ Tulis hanya isi pesannya saja, tanpa label atau penjelasan tambahan.`
 
   await supabase.from('agent_logs').insert({
     company_id: COMPANY_ID,
-    type: 'ai',
+    type: 'info', // 'ai' is not a valid agent_logs.type — see note above
     message: `Draft pesan pertama dibuat untuk ${candidate.name} (menunggu approval)`,
     metadata: { candidate_id },
   })
@@ -478,7 +482,7 @@ Tulis hanya isi pesannya saja, tanpa label atau penjelasan tambahan.`
 
   await supabase.from('agent_logs').insert({
     company_id: COMPANY_ID,
-    type: 'ai',
+    type: 'info', // 'ai' is not a valid agent_logs.type — see note above
     message: `Draft undangan interview dibuat untuk ${candidate.name} (menunggu approval)`,
     metadata: { candidate_id },
   })

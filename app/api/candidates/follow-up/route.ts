@@ -62,13 +62,17 @@ export async function POST(req: NextRequest) {
         attempts: 0,
       }))
     )
-
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-    fetch(`${baseUrl}/api/agent/run`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
-    }).catch(() => {})
   }
+
+  // Always trigger, even with nothing new enqueued — this is also how a
+  // "already queued" task stranded at pending (e.g. a previous attempt that
+  // failed and was requeued, but nothing has called agent/run since) gets
+  // another chance instead of sitting stuck forever.
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+  fetch(`${baseUrl}/api/agent/run`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+  }).catch(() => {})
 
   return NextResponse.json({
     enqueued: toEnqueue.length,
