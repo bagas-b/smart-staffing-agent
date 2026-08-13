@@ -12,7 +12,6 @@ import { ExternalLink, RefreshCw, Phone, Mail, User, MapPin, Briefcase } from 'l
 import { TelegramLinkStatus } from '@/components/shared/TelegramLinkStatus'
 import { TelegramBadge } from '@/components/shared/TelegramBadge'
 import { STATUS_LABELS, STATUS_COLOR } from '@/lib/candidates/status'
-import { HireSection } from './HireSection'
 import { InterviewSection } from './InterviewSection'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -383,8 +382,6 @@ export function CandidateModal({ candidateId, onClose, snapshot }: CandidateModa
             />
           )}
 
-          {/* Onboarding & Performance */}
-          {!fetching && current && <HireSection candidateId={current.id} status={current.status} />}
 
           {/* AI Analysis */}
           {!fetching && candidateId && <ScoreSection candidateId={candidateId} />}
