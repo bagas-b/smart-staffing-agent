@@ -163,13 +163,20 @@ export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Ca
                     {c.outlet && (
                       <p className="text-[11px] text-gray-400 truncate">{c.outlet}</p>
                     )}
-                    {(c.candidate_scores?.[0] || c.telegram_chat_id || c.interview_scheduled_at) && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        <TierBadge score={c.candidate_scores?.[0]} />
-                        {c.telegram_chat_id && <TelegramBadge />}
-                        {c.interview_scheduled_at && <InterviewBadge scheduledAt={c.interview_scheduled_at} />}
-                      </div>
-                    )}
+                    {(() => {
+                      // Only relevant while the interview is still pending —
+                      // once a Lulus/Tidak Lulus decision is recorded the
+                      // candidate has moved on, so the "sudah terjadwal"
+                      // badge stops being useful information on the card.
+                      const showInterviewBadge = c.status === 'interview_dijadwalkan' && !!c.interview_scheduled_at
+                      return (c.candidate_scores?.[0] || c.telegram_chat_id || showInterviewBadge) && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          <TierBadge score={c.candidate_scores?.[0]} />
+                          {c.telegram_chat_id && <TelegramBadge />}
+                          {showInterviewBadge && <InterviewBadge scheduledAt={c.interview_scheduled_at!} />}
+                        </div>
+                      )
+                    })()}
                   </button>
                 ))}
               </div>
