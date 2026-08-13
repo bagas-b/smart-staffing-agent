@@ -123,7 +123,7 @@ export function RecommendationPanel({ candidates }: { candidates: ScoredCandidat
           const isRowBusy = rowBusyId === c.candidate_id
           return (
             <div key={c.candidate_id} className="flex items-start gap-3 p-3 hover:bg-gray-50 transition-colors">
-              <Link href={`/candidates/${c.candidate_id}`} className="flex-1 min-w-0 space-y-1">
+              <Link href={`/candidates?candidate=${c.candidate_id}`} className="flex-1 min-w-0 space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-gray-800">{c.candidates?.name}</span>
                   <TierBadge prob={c.hire_success_probability} confidence={reasoning?.confidence} />

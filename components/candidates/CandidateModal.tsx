@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ExternalLink, RefreshCw, Phone, Mail, User, MapPin, Briefcase } from 'lucide-react'
-import { MessageBubble } from '@/components/shared/MessageBubble'
 import { TelegramLinkStatus } from '@/components/shared/TelegramLinkStatus'
 import { TelegramBadge } from '@/components/shared/TelegramBadge'
 import { STATUS_LABELS, STATUS_COLOR } from '@/lib/candidates/status'
@@ -261,9 +260,6 @@ export function CandidateModal({ candidateId, onClose, snapshot }: CandidateModa
   const position = current?.position ?? snapshot?.position
   const outlet   = current?.outlet   ?? snapshot?.outlet
 
-  const messages = [...(current?.candidate_messages ?? [])]
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
       {/* Override default sm:max-w-sm to get a wider modal */}
@@ -393,27 +389,6 @@ export function CandidateModal({ candidateId, onClose, snapshot }: CandidateModa
           {!fetching && candidateId && <ScoreSection candidateId={candidateId} />}
           {fetching && (
             <div className="rounded-lg border bg-gray-50 p-4 animate-pulse h-24" />
-          )}
-
-          {/* Message history */}
-          {messages.length > 0 && (
-            <div className="rounded-lg border overflow-hidden">
-              <div className="px-3 py-2 bg-gray-50 border-b">
-                <p className="text-xs font-semibold text-gray-700">
-                  Riwayat Pesan WA
-                  <span className="ml-1.5 font-normal text-gray-400">({messages.length})</span>
-                </p>
-              </div>
-              <div className="p-3 space-y-2 max-h-48 overflow-y-auto bg-white">
-                {messages.map(m => (
-                  <MessageBubble key={m.id} direction={m.direction} content={m.content} created_at={m.created_at} channel={m.channel} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!fetching && messages.length === 0 && current && (
-            <p className="text-xs text-gray-400 text-center py-1">Belum ada riwayat pesan.</p>
           )}
         </div>
       </DialogContent>
