@@ -4,19 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { notFound } from 'next/navigation'
 import { ScoreCard } from '@/components/candidates/ScoreCard'
 import { TelegramBadge } from '@/components/shared/TelegramBadge'
-
-const STATUS_LABELS: Record<string, string> = {
-  belum_dihubungi: 'Belum Dihubungi',
-  menunggu_balasan: 'Menunggu Balasan',
-  tertarik: 'Tertarik',
-  butuh_info: 'Butuh Info',
-  tidak_tertarik: 'Tidak Tertarik',
-  interview_dijadwalkan: 'Interview Dijadwalkan',
-  lulus_interview: 'Lulus Interview',
-  tidak_lulus: 'Tidak Lulus',
-  onboarding: 'Onboarding',
-  aktif: 'Aktif',
-}
+import { STATUS_LABELS } from '@/lib/candidates/status'
 
 async function getCandidate(id: string) {
   const supabase = createServiceClient()
