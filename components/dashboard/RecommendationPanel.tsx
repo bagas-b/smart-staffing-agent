@@ -1,10 +1,10 @@
 'use client'
 import { useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Send, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TelegramBadge } from '@/components/shared/TelegramBadge'
+import { CandidateModal } from '@/components/candidates/CandidateModal'
 import { STATUS_LABELS, STATUS_COLOR } from '@/lib/candidates/status'
 
 export type ScoredCandidate = {
@@ -58,6 +58,14 @@ export function RecommendationPanel({ candidates }: { candidates: ScoredCandidat
   const [bulkBusy, setBulkBusy] = useState(false)
   const [rowBusyId, setRowBusyId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  function closeModal() {
+    setSelectedId(null)
+    // Picks up any status/score change made from inside the modal (hire,
+    // interview decision, etc.) without a full page navigation.
+    router.refresh()
+  }
 
   function describe(data: { enqueued: number; alreadyQueued: number }) {
     const parts: string[] = []
@@ -123,7 +131,11 @@ export function RecommendationPanel({ candidates }: { candidates: ScoredCandidat
           const isRowBusy = rowBusyId === c.candidate_id
           return (
             <div key={c.candidate_id} className="flex items-start gap-3 p-3 hover:bg-gray-50 transition-colors">
-              <Link href={`/candidates?candidate=${c.candidate_id}`} className="flex-1 min-w-0 space-y-1">
+              <button
+                type="button"
+                onClick={() => setSelectedId(c.candidate_id)}
+                className="flex-1 min-w-0 space-y-1 text-left"
+              >
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-gray-800">{c.candidates?.name}</span>
                   <TierBadge prob={c.hire_success_probability} confidence={reasoning?.confidence} />
@@ -138,7 +150,7 @@ export function RecommendationPanel({ candidates }: { candidates: ScoredCandidat
                     {reasoning.recommendation}
                   </p>
                 )}
-              </Link>
+              </button>
               <button
                 type="button"
                 disabled={isRowBusy}
@@ -157,6 +169,8 @@ export function RecommendationPanel({ candidates }: { candidates: ScoredCandidat
           <p className="p-4 text-sm text-gray-400">Belum ada kandidat yang di-score. Upload CSV untuk memulai.</p>
         )}
       </div>
+
+      <CandidateModal candidateId={selectedId} onClose={closeModal} />
     </div>
   )
 }
