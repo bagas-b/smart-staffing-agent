@@ -1,7 +1,9 @@
 'use client'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { CalendarClock, CheckCircle2, XCircle } from 'lucide-react'
+import { CalendarClock, CheckCircle2, XCircle, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react'
+import { MessageBubble } from '@/components/shared/MessageBubble'
+import type { Message } from './CandidateModal'
 
 interface Decision {
   id: string
@@ -15,6 +17,7 @@ interface InterviewSectionProps {
   status: string
   interviewScheduledAt: string | null
   decisions: Decision[]
+  messages: Message[]
   onChanged: () => void
 }
 
@@ -132,13 +135,17 @@ function DecisionForm({ candidateId, onDecided }: { candidateId: string; onDecid
   )
 }
 
-export function InterviewSection({ candidateId, status, interviewScheduledAt, decisions, onChanged }: InterviewSectionProps) {
+export function InterviewSection({ candidateId, status, interviewScheduledAt, decisions, messages, onChanged }: InterviewSectionProps) {
+  // Hooks must run unconditionally, before the early-return below.
+  const [showMessages, setShowMessages] = useState(false)
+
   // Nothing to show until the candidate has expressed interest — avoid
   // cluttering the modal for every candidate regardless of stage.
   const relevantStages = ['tertarik', 'interview_dijadwalkan', 'lulus_interview', 'tidak_lulus']
   if (!relevantStages.includes(status) && decisions.length === 0 && !interviewScheduledAt) return null
 
   const latestDecision = [...decisions].sort((a, b) => new Date(b.decided_at).getTime() - new Date(a.decided_at).getTime())[0]
+  const sortedMessages = [...messages].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 
   return (
     <div className="rounded-lg border bg-white overflow-hidden">
@@ -147,12 +154,41 @@ export function InterviewSection({ candidateId, status, interviewScheduledAt, de
       </div>
       <div className="p-3 space-y-2">
         {interviewScheduledAt && (
-          <p className="text-xs text-gray-600 flex items-center gap-1.5">
-            <CalendarClock size={12} className="text-gray-400" />
-            {new Date(interviewScheduledAt).toLocaleString('id-ID', {
-              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
-            })} WIB
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-gray-600 flex items-center gap-1.5">
+              <CalendarClock size={12} className="text-gray-400" />
+              {new Date(interviewScheduledAt).toLocaleString('id-ID', {
+                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+              })} WIB
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowMessages(v => !v)}
+              className="shrink-0 flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+            >
+              <MessageSquare size={11} />
+              Lihat Pesan
+              {showMessages ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+            </button>
+          </div>
+        )}
+
+        {interviewScheduledAt && showMessages && (
+          <div className="rounded-lg border overflow-hidden">
+            <div className="px-3 py-2 bg-gray-50 border-b">
+              <p className="text-xs font-semibold text-gray-700">
+                Riwayat Pesan
+                <span className="ml-1.5 font-normal text-gray-400">({sortedMessages.length})</span>
+              </p>
+            </div>
+            <div className="p-3 space-y-2 max-h-48 overflow-y-auto bg-white">
+              {sortedMessages.length > 0
+                ? sortedMessages.map(m => (
+                    <MessageBubble key={m.id} direction={m.direction} content={m.content} created_at={m.created_at} channel={m.channel} />
+                  ))
+                : <p className="text-xs text-gray-400 text-center py-1">Belum ada riwayat pesan.</p>}
+            </div>
+          </div>
         )}
 
         {status === 'tertarik' && !interviewScheduledAt && (

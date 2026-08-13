@@ -17,7 +17,7 @@ import { InterviewSection } from './InterviewSection'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Message {
+export interface Message {
   id: string
   direction: string
   content: string
@@ -378,6 +378,7 @@ export function CandidateModal({ candidateId, onClose, snapshot }: CandidateModa
               status={current.status}
               interviewScheduledAt={current.interview_scheduled_at ?? null}
               decisions={current.candidate_decisions ?? []}
+              messages={current.candidate_messages ?? []}
               onChanged={refetchCandidate}
             />
           )}
