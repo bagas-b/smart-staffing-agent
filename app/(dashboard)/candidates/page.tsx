@@ -9,7 +9,7 @@ async function getCandidates() {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('candidates')
-    .select('id, name, status, position, outlet, telegram_chat_id, candidate_scores(cv_fit_score, hire_success_probability, scoring_reasoning)')
+    .select('id, name, status, position, outlet, telegram_chat_id, interview_scheduled_at, candidate_scores(cv_fit_score, hire_success_probability, scoring_reasoning)')
     .eq('company_id', process.env.COMPANY_ID!)
     .order('created_at', { ascending: false })
   return data ?? []

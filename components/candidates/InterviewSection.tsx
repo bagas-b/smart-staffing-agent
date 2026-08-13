@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { CalendarClock, CheckCircle2, XCircle, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react'
+import { CalendarClock, CheckCircle2, XCircle, MessageSquare, ChevronDown, ChevronUp, Send, Loader2 } from 'lucide-react'
 import { MessageBubble } from '@/components/shared/MessageBubble'
 import type { Message } from './CandidateModal'
 
@@ -21,26 +21,39 @@ interface InterviewSectionProps {
   onChanged: () => void
 }
 
+interface DraftResult { id: string; content: string; channel: string }
+
 function ScheduleForm({ candidateId, onScheduled }: { candidateId: string; onScheduled: () => void }) {
-  const [open, setOpen] = useState(false)
-  const [datetime, setDatetime] = useState('')
+  const [step, setStep] = useState<'closed' | 'form' | 'confirming'>('closed')
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [location, setLocation] = useState('')
+  const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  const [draft, setDraft] = useState<DraftResult | null>(null)
+  const [warning, setWarning] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState('')
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!datetime) { setError('Pilih tanggal & jam dulu'); return }
+    if (!date || !time) { setError('Isi tanggal & waktu dulu'); return }
     setSaving(true)
     setError('')
     try {
+      const scheduledAt = new Date(`${date}T${time}`).toISOString()
       const res = await fetch(`/api/candidates/${candidateId}/schedule-interview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scheduledAt: new Date(datetime).toISOString() }),
+        body: JSON.stringify({ scheduledAt, location: location.trim(), notes: notes.trim() }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Gagal menjadwalkan interview')
-      onScheduled()
+      setDraft(data.draft ?? null)
+      setWarning(data.warning ?? '')
+      setStep('confirming')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Gagal menjadwalkan interview')
     } finally {
@@ -48,31 +61,101 @@ function ScheduleForm({ candidateId, onScheduled }: { candidateId: string; onSch
     }
   }
 
-  if (!open) {
+  async function sendNow() {
+    if (!draft) return
+    setSending(true)
+    setSendError('')
+    try {
+      const res = await fetch('/api/approval/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: draft.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Gagal mengirim pesan')
+      onScheduled()
+    } catch (e: unknown) {
+      setSendError(e instanceof Error ? e.message : 'Gagal mengirim pesan')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (step === 'closed') {
     return (
-      <Button size="sm" onClick={() => setOpen(true)} className="bg-[#1E3A2F] hover:bg-[#2d5242] gap-1.5 w-full">
+      <Button size="sm" onClick={() => setStep('form')} className="bg-[#1E3A2F] hover:bg-[#2d5242] gap-1.5 w-full">
         <CalendarClock size={14} /> Jadwalkan Interview
       </Button>
+    )
+  }
+
+  if (step === 'confirming') {
+    return (
+      <div className="rounded-lg border bg-gray-50 p-3 space-y-2">
+        <p className="text-xs font-medium text-gray-700">Jadwal tersimpan.</p>
+        {warning && <p className="text-xs text-amber-600">{warning}</p>}
+        {draft && (
+          <>
+            <div className="rounded-lg border bg-white p-2.5">
+              <p className="text-[10px] text-gray-400 mb-1">Draft undangan ({draft.channel === 'telegram' ? 'Telegram' : 'WA'}) — bisa diedit dulu di halaman Approval kalau perlu:</p>
+              <p className="text-xs text-gray-700 whitespace-pre-wrap">{draft.content}</p>
+            </div>
+            {sendError && <p className="text-xs text-red-600">{sendError}</p>}
+            <div className="flex gap-2">
+              <Button type="button" size="sm" disabled={sending} onClick={sendNow} className="gap-1.5 flex-1 bg-[#1E3A2F] hover:bg-[#2d5242]">
+                {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                {sending ? 'Mengirim...' : 'Kirim Sekarang'}
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={onScheduled}>Nanti di Approval</Button>
+            </div>
+          </>
+        )}
+        {!draft && (
+          <Button type="button" size="sm" variant="outline" onClick={onScheduled} className="w-full">Tutup</Button>
+        )}
+      </div>
     )
   }
 
   return (
     <form onSubmit={submit} className="rounded-lg border bg-gray-50 p-3 space-y-2">
       {error && <p className="text-xs text-red-600">{error}</p>}
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          type="date"
+          value={date}
+          onChange={e => setDate(e.target.value)}
+          className="h-8 rounded-lg border border-input bg-white px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        />
+        <input
+          type="time"
+          value={time}
+          onChange={e => setTime(e.target.value)}
+          className="h-8 rounded-lg border border-input bg-white px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        />
+      </div>
       <input
-        type="datetime-local"
-        value={datetime}
-        onChange={e => setDatetime(e.target.value)}
+        type="text"
+        value={location}
+        onChange={e => setLocation(e.target.value)}
+        placeholder="Lokasi (opsional) — misal: Outlet Greenly Sudirman"
         className="w-full h-8 rounded-lg border border-input bg-white px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
       />
+      <textarea
+        value={notes}
+        onChange={e => setNotes(e.target.value)}
+        rows={2}
+        placeholder="Catatan (opsional) — akan disertakan sebagai konteks untuk draft undangan..."
+        className="w-full rounded-lg border border-input bg-white px-2.5 py-1.5 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 resize-none"
+      />
       <p className="text-[11px] text-gray-400">
-        Setelah dijadwalkan, agent otomatis bikin draft undangan interview — cek di menu Approval.
+        Setelah disimpan, agent langsung bikin draft undangan di sini — tinggal review & kirim.
       </p>
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={saving} className="bg-[#1E3A2F] hover:bg-[#2d5242]">
-          {saving ? 'Menyimpan...' : 'Jadwalkan'}
+          {saving ? 'Menyiapkan draft...' : 'Jadwalkan'}
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>Batal</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setStep('closed')}>Batal</Button>
       </div>
     </form>
   )
@@ -191,11 +274,17 @@ export function InterviewSection({ candidateId, status, interviewScheduledAt, de
           </div>
         )}
 
-        {status === 'tertarik' && !interviewScheduledAt && (
+        {/* Covers both a fresh 'tertarik' candidate and one the agent already
+            moved into 'interview_dijadwalkan' off a chat confirmation
+            (status set, but no actual date/time picked yet). */}
+        {(status === 'tertarik' || status === 'interview_dijadwalkan') && !interviewScheduledAt && (
           <ScheduleForm candidateId={candidateId} onScheduled={onChanged} />
         )}
 
-        {status === 'interview_dijadwalkan' && (
+        {/* Decision only makes sense once an interview actually happened —
+            gate on a real date, not just the status, since status alone can
+            now mean "agreed to interview" with nothing scheduled yet. */}
+        {status === 'interview_dijadwalkan' && interviewScheduledAt && (
           <DecisionForm candidateId={candidateId} onDecided={onChanged} />
         )}
 

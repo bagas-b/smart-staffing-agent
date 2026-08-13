@@ -138,17 +138,19 @@ async function processClassifyTask(
 
   const { data: candidate } = await supabase
     .from('candidates')
-    .select('name, position, outlet')
+    .select('name, position, outlet, status')
     .eq('id', candidate_id)
     .eq('company_id', COMPANY_ID)
     .single()
 
   const prompt = `Kamu adalah asisten HR. Klasifikasikan balasan kandidat berikut.
 
-Balasan: "${message}"
+Status kandidat saat ini di sistem: ${candidate?.status ?? 'tidak diketahui'}
+Balasan kandidat: "${message}"
 
 Klasifikasikan sebagai salah satu:
-- tertarik: kandidat tertarik dengan posisi
+- tertarik: kandidat menyatakan tertarik dengan posisi (untuk balasan pertama yang menyatakan minat)
+- siap_interview: kandidat SUDAH berstatus "tertarik" sebelumnya, dan balasan ini adalah konfirmasi kesediaan untuk dijadwalkan/diwawancara (misal "boleh, tolong jadwalkan", "siap kapan saja") — HANYA pilih ini jika status kandidat saat ini di atas memang "tertarik", jika bukan tetap pilih "tertarik"
 - tidak_tertarik: kandidat tidak tertarik atau menolak
 - butuh_info: kandidat membutuhkan informasi lebih lanjut
 - tidak_jelas: tidak dapat menentukan maksud kandidat
@@ -173,12 +175,22 @@ Jawab HANYA dalam format JSON:
     return
   }
 
+  // Defense in depth against the LLM ignoring the current-status instruction
+  // above — a 'siap_interview' classification is only ever honored coming
+  // from an already-'tertarik' candidate, otherwise it's downgraded back to
+  // plain 'tertarik' so an unrelated candidate can't jump straight to the
+  // interview column.
+  const classification = parsed.classification === 'siap_interview' && candidate?.status !== 'tertarik'
+    ? 'tertarik'
+    : parsed.classification
+
   const statusMap: Record<string, string> = {
     tertarik: 'tertarik',
+    siap_interview: 'interview_dijadwalkan',
     tidak_tertarik: 'tidak_tertarik',
     butuh_info: 'menunggu_balasan',
   }
-  const newStatus = statusMap[parsed.classification] ?? 'menunggu_balasan'
+  const newStatus = statusMap[classification] ?? 'menunggu_balasan'
 
   await supabase.from('candidates')
     .update({ status: newStatus, last_agent_action: 'classified_reply' })
@@ -200,7 +212,7 @@ Jawab HANYA dalam format JSON:
   let replyPrompt: string | null = null
   let autoSend = false
 
-  if (parsed.classification === 'butuh_info') {
+  if (classification === 'butuh_info') {
     const { data: job } = await supabase
       .from('job_postings')
       .select('title, salary_range, description')
@@ -217,7 +229,7 @@ Outlet: ${candidate?.outlet ?? '-'}
 ${job ? `Gaji: ${job.salary_range ?? 'kompetitif'}\nDeskripsi singkat: ${(job.description ?? '').slice(0, 200)}` : ''}
 
 Buat pesan yang ramah, informatif, dalam Bahasa Indonesia. Kembalikan hanya teks pesan.`
-  } else if (parsed.classification === 'tertarik') {
+  } else if (classification === 'tertarik') {
     autoSend = true
     replyPrompt = `Tulis pesan balasan singkat (maks 3 kalimat) untuk kandidat yang baru saja menyatakan tertarik dengan lowongan kerja.
 
@@ -226,7 +238,15 @@ Posisi: ${candidate?.position ?? '-'}
 Outlet: ${candidate?.outlet ?? '-'}
 
 Pesan harus: ucapkan terima kasih atas ketertarikannya, jelaskan bahwa tim HR akan segera menghubungi untuk jadwal interview, nada ramah dan profesional dalam Bahasa Indonesia. Kembalikan hanya teks pesan.`
-  } else if (parsed.classification === 'tidak_tertarik') {
+  } else if (classification === 'siap_interview') {
+    autoSend = true
+    replyPrompt = `Tulis pesan balasan singkat (maks 2-3 kalimat) untuk kandidat yang baru saja mengonfirmasi kesediaannya untuk dijadwalkan interview.
+
+Kandidat: ${candidate?.name ?? 'Kandidat'}
+Posisi: ${candidate?.position ?? '-'}
+
+Pesan harus: ucapkan terima kasih atas konfirmasinya, sampaikan bahwa tim HR akan segera mengirimkan detail jadwal interview, nada ramah dan profesional dalam Bahasa Indonesia. Kembalikan hanya teks pesan.`
+  } else if (classification === 'tidak_tertarik') {
     autoSend = true
     replyPrompt = `Tulis pesan balasan singkat (maks 2-3 kalimat) untuk kandidat yang menyatakan tidak tertarik/menolak lowongan kerja.
 
@@ -275,14 +295,15 @@ Pesan harus: ucapkan terima kasih sudah meluangkan waktu, sampaikan pintu tetap 
 
   const CLASSIFICATION_LABEL: Record<string, string> = {
     tertarik: 'tertarik',
+    siap_interview: 'siap untuk interview',
     tidak_tertarik: 'tidak tertarik',
     butuh_info: 'butuh info lebih lanjut',
   }
   await supabase.from('agent_logs').insert({
     company_id: COMPANY_ID,
     type: 'info',
-    message: `Balasan ${candidate?.name ?? 'kandidat'} diklasifikasikan: ${CLASSIFICATION_LABEL[parsed.classification] ?? parsed.classification}`,
-    metadata: { candidate_id, classification: parsed.classification },
+    message: `Balasan ${candidate?.name ?? 'kandidat'} diklasifikasikan: ${CLASSIFICATION_LABEL[classification] ?? classification}`,
+    metadata: { candidate_id, classification },
   })
 }
 

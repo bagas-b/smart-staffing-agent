@@ -5,7 +5,7 @@ import { CandidateModal } from './CandidateModal'
 import { AddCandidateModal } from './AddCandidateModal'
 import { CandidateUploadForm } from './CandidateUploadForm'
 import { Button } from '@/components/ui/button'
-import { Plus, Send } from 'lucide-react'
+import { Plus, Send, CalendarCheck } from 'lucide-react'
 import { TelegramBadge } from '@/components/shared/TelegramBadge'
 
 interface CandidateScore {
@@ -20,7 +20,20 @@ interface Candidate {
   position?: string | null
   outlet?: string | null
   telegram_chat_id?: string | null
+  interview_scheduled_at?: string | null
   candidate_scores?: Array<CandidateScore> | null
+}
+
+function InterviewBadge({ scheduledAt }: { scheduledAt: string }) {
+  const label = new Date(scheduledAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium whitespace-nowrap"
+      title={`Interview terjadwal: ${new Date(scheduledAt).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}`}
+    >
+      <CalendarCheck size={9} /> Terjadwal {label}
+    </span>
+  )
 }
 
 const PIPELINE = [
@@ -150,10 +163,11 @@ export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Ca
                     {c.outlet && (
                       <p className="text-[11px] text-gray-400 truncate">{c.outlet}</p>
                     )}
-                    {(c.candidate_scores?.[0] || c.telegram_chat_id) && (
+                    {(c.candidate_scores?.[0] || c.telegram_chat_id || c.interview_scheduled_at) && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         <TierBadge score={c.candidate_scores?.[0]} />
                         {c.telegram_chat_id && <TelegramBadge />}
+                        {c.interview_scheduled_at && <InterviewBadge scheduledAt={c.interview_scheduled_at} />}
                       </div>
                     )}
                   </button>
