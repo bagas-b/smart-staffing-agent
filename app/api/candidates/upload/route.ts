@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { getBaseUrl } from '@/lib/utils/base-url'
 import * as XLSX from 'xlsx'
 
 const COMPANY_ID = process.env.COMPANY_ID!
@@ -124,7 +125,7 @@ export async function POST(req: NextRequest) {
         payload: { candidate_id },
       })),
     ])
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+    const baseUrl = getBaseUrl()
     fetch(`${baseUrl}/api/agent/run`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` },

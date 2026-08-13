@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { getBaseUrl } from '@/lib/utils/base-url'
 
 const COMPANY_ID = process.env.COMPANY_ID!
 const FOLLOW_UP_THRESHOLD_HOURS = 48
@@ -38,7 +39,7 @@ export async function GET(req: Request) {
   }
 
   if (enqueued.length > 0) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+    const baseUrl = getBaseUrl()
     await fetch(`${baseUrl}/api/agent/run`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` },

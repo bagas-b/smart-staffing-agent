@@ -2,6 +2,7 @@ import { NextResponse, NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { callClaude } from '@/lib/ai/client'
 import { dispatchDraft } from '@/lib/approval/dispatch'
+import { getBaseUrl } from '@/lib/utils/base-url'
 
 const COMPANY_ID = process.env.COMPANY_ID!
 const MAX_TASKS_PER_RUN = 40
@@ -88,7 +89,7 @@ async function processScoreTask(
   const { candidate_id, job_posting_id } = task.payload
   if (!candidate_id) throw new Error('missing candidate_id in payload')
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+  const baseUrl = getBaseUrl()
   const res = await fetch(`${baseUrl}/api/ai/score`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

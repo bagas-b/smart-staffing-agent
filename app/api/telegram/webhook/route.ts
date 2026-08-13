@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendTelegramMessage } from '@/lib/telegram/client'
+import { getBaseUrl } from '@/lib/utils/base-url'
 
 const COMPANY_ID = process.env.COMPANY_ID!
 
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
     attempts: 0,
   })
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+  const baseUrl = getBaseUrl()
   fetch(`${baseUrl}/api/agent/run`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },

@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { requireUser } from '@/lib/auth/require-user'
+import { getBaseUrl } from '@/lib/utils/base-url'
 
 const COMPANY_ID = process.env.COMPANY_ID!
 
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
   // "already queued" task stranded at pending (e.g. a previous attempt that
   // failed and was requeued, but nothing has called agent/run since) gets
   // another chance instead of sitting stuck forever.
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+  const baseUrl = getBaseUrl()
   fetch(`${baseUrl}/api/agent/run`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
