@@ -74,6 +74,11 @@ const benefits = [
 ]
 
 export default function LandingPage() {
+  // In demo mode there's no real Supabase auth user to log in with — middleware
+  // already lets anyone straight through to /dashboard, so sending CTAs to
+  // /login here would just dead-end on a login form nobody has credentials for.
+  const ctaHref = process.env.DEMO_MODE === 'true' ? '/dashboard' : '/login'
+
   return (
     <div className="min-h-screen bg-white">
       {/* Nav */}
@@ -84,7 +89,7 @@ export default function LandingPage() {
             Greenly Staffing
           </div>
           <Link
-            href="/login"
+            href={ctaHref}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#1E3A2F] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2d5242]"
           >
             Masuk <ArrowRight size={14} />
@@ -108,7 +113,7 @@ export default function LandingPage() {
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
             <Link
-              href="/login"
+              href={ctaHref}
               className="inline-flex items-center gap-1.5 rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-[#1E3A2F] transition-colors hover:bg-white/90"
             >
               Masuk ke Dashboard <ArrowRight size={15} />
@@ -230,7 +235,7 @@ export default function LandingPage() {
           Masuk ke dashboard dan biarkan agent menangani screening awal, HR fokus di keputusan akhir.
         </p>
         <Link
-          href="/login"
+          href={ctaHref}
           className="mt-7 inline-flex items-center gap-1.5 rounded-lg bg-[#1E3A2F] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#2d5242]"
         >
           Masuk ke Dashboard <ArrowRight size={15} />
