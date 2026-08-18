@@ -1,7 +1,9 @@
 import { NextResponse, NextRequest } from 'next/server'
 import { callClaude } from '@/lib/ai/client'
 import { createServiceClient } from '@/lib/supabase/server'
-import { PDFParse } from 'pdf-parse'
+
+// Scoring can call Claude which may take >10s; bump to max allowed.
+export const maxDuration = 60
 
 const COMPANY_ID = process.env.COMPANY_ID!
 
@@ -80,6 +82,7 @@ export async function POST(req: NextRequest) {
   let cvText: string | null = null
   if (candidate.cv_url) {
     try {
+      const { PDFParse } = await import('pdf-parse')
       const parser = new PDFParse({ url: candidate.cv_url })
       const result = await parser.getText()
       await parser.destroy()
