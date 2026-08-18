@@ -57,7 +57,7 @@ async function getDashboardData() {
       .order('created_at', { ascending: false })
       .limit(5),
     supabase.from('candidate_scores')
-      .select('candidate_id, hire_success_probability, cv_fit_score, scoring_reasoning, candidates!inner(id, name, position, outlet, telegram_chat_id, status)')
+      .select('candidate_id, hire_success_probability, cv_fit_score, scoring_reasoning, candidates!inner(id, name, position, outlet, status)')
       .eq('company_id', companyId)
       .order('hire_success_probability', { ascending: false })
       .limit(5),

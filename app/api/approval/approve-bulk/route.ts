@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
   }
 
   const serviceSupabase = createServiceClient()
-  // Sequential, not Promise.all — avoids hammering the WA/Telegram APIs with a
-  // burst of simultaneous sends when HR approves a large batch at once.
+  // Sequential, not Promise.all — avoids hammering the WA API with a burst
+  // of simultaneous sends when HR approves a large batch at once.
   const results = []
   for (const id of ids) {
     results.push(await dispatchDraft(serviceSupabase, id))

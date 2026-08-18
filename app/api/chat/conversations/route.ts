@@ -17,7 +17,7 @@ export async function GET() {
   // Revisit with a `last_message_at` column + index if this gets slow at scale.
   const { data, error } = await supabase
     .from('candidates')
-    .select('id, name, position, outlet, phone, telegram_chat_id, candidate_messages(content, created_at, direction, channel)')
+    .select('id, name, position, outlet, phone, candidate_messages(content, created_at, direction, channel)')
     .eq('company_id', COMPANY_ID)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -41,7 +41,6 @@ export async function GET() {
         position: c.position,
         outlet: c.outlet,
         phone: c.phone,
-        telegramLinked: !!c.telegram_chat_id,
         lastMessage: last.content,
         lastMessageAt: last.created_at,
         lastChannel: last.channel,

@@ -6,7 +6,6 @@ import { AddCandidateModal } from './AddCandidateModal'
 import { CandidateUploadForm } from './CandidateUploadForm'
 import { Button } from '@/components/ui/button'
 import { Plus, Send, CalendarCheck } from 'lucide-react'
-import { TelegramBadge } from '@/components/shared/TelegramBadge'
 
 interface CandidateScore {
   hire_success_probability: number
@@ -19,7 +18,6 @@ interface Candidate {
   status: string
   position?: string | null
   outlet?: string | null
-  telegram_chat_id?: string | null
   interview_scheduled_at?: string | null
   candidate_scores?: Array<CandidateScore> | null
 }
@@ -169,10 +167,9 @@ export function KanbanBoard({ candidates, initialCandidateId }: { candidates: Ca
                       // candidate has moved on, so the "sudah terjadwal"
                       // badge stops being useful information on the card.
                       const showInterviewBadge = c.status === 'interview_dijadwalkan' && !!c.interview_scheduled_at
-                      return (c.candidate_scores?.[0] || c.telegram_chat_id || showInterviewBadge) && (
+                      return (c.candidate_scores?.[0] || showInterviewBadge) && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           <TierBadge score={c.candidate_scores?.[0]} />
-                          {c.telegram_chat_id && <TelegramBadge />}
                           {showInterviewBadge && <InterviewBadge scheduledAt={c.interview_scheduled_at!} />}
                         </div>
                       )

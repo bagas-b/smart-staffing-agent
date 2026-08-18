@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pencil, Check, X as XIcon } from 'lucide-react'
-import { TelegramBadge } from '@/components/shared/TelegramBadge'
 
 type Draft = {
   id: string
@@ -10,10 +9,10 @@ type Draft = {
   channel: string
   created_at: string
   candidate_id: string
-  candidates: { name: string; position: string | null; outlet: string | null; telegram_chat_id: string | null } | null
+  candidates: { name: string; position: string | null; outlet: string | null } | null
 }
 
-const CHANNEL_LABEL: Record<string, string> = { wa: 'WhatsApp', telegram: 'Telegram', email: 'Email' }
+const CHANNEL_LABEL: Record<string, string> = { wa: 'WhatsApp', email: 'Email' }
 
 function DraftCard({
   draft, selected, onToggleSelect, onSaved, onRemoved, busy, setBusy,
@@ -82,7 +81,6 @@ function DraftCard({
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium flex items-center gap-1.5">
               {draft.candidates?.name ?? draft.candidate_id}
-              {draft.candidates?.telegram_chat_id && <TelegramBadge />}
             </span>
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">

@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .update({ status: newStatus, updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('company_id', COMPANY_ID)
-    .select('name, position, outlet, phone, telegram_chat_id')
+    .select('name, position, outlet, phone')
     .single()
 
   if (decision !== 'lulus' || !candidate) {
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // "Lulus" carries a real commitment (a start date) — draft it for HR to
   // review/edit/approve rather than auto-sending, same rule as the interview
   // invite: anything with a factual promise stays human-reviewed.
-  const channel = candidate.telegram_chat_id ? 'telegram' : candidate.phone ? 'wa' : null
+  const channel = candidate.phone ? 'wa' : null
   if (!channel) return NextResponse.json({ success: true })
 
   const onboardingDate = new Date()

@@ -82,6 +82,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ processed })
 }
 
+// Vercel crons invoke GET; internal fire-and-forget calls use POST.
+export const GET = POST
+
 async function processScoreTask(
   supabase: ReturnType<typeof createServiceClient>,
   task: { id: string; payload: { candidate_id?: string; job_posting_id?: string } },
@@ -129,12 +132,9 @@ async function processClassifyTask(
   supabase: ReturnType<typeof createServiceClient>,
   task: { id: string; payload: { candidate_id?: string; message?: string; channel?: string } },
 ) {
-  const { candidate_id, message, channel: inboundChannel } = task.payload
+  const { candidate_id, message } = task.payload
   if (!candidate_id || !message) throw new Error('missing candidate_id or message in payload')
-  // The auto-drafted reply must go out on whatever channel the candidate actually
-  // messaged in on — defaulting to 'wa' here would silently produce an
-  // undeliverable draft for Telegram-only candidates.
-  const replyChannel = inboundChannel === 'telegram' ? 'telegram' : 'wa'
+  const replyChannel = 'wa'
 
   const { data: candidate } = await supabase
     .from('candidates')
@@ -316,16 +316,14 @@ async function processDraftFollowUpTask(
 
   const { data: candidate } = await supabase
     .from('candidates')
-    .select('id, name, follow_up_count, position, outlet, phone, telegram_chat_id')
+    .select('id, name, follow_up_count, position, outlet, phone')
     .eq('id', candidate_id)
     .eq('company_id', COMPANY_ID)
     .single()
 
   if (!candidate) throw new Error(`candidate ${candidate_id} not found`)
 
-  // Prefer whichever channel the candidate is actually reachable on — defaulting
-  // to 'wa' would produce an undeliverable draft for Telegram-only candidates.
-  const followUpChannel = candidate.telegram_chat_id ? 'telegram' : 'wa'
+  const followUpChannel = 'wa'
 
   if ((candidate.follow_up_count ?? 0) >= 2) {
     await supabase.from('candidates').update({
@@ -383,7 +381,7 @@ async function processInitialOutreachTask(
 
   const { data: candidate } = await supabase
     .from('candidates')
-    .select('id, name, position, outlet, phone, telegram_chat_id, applied_job_id')
+    .select('id, name, position, outlet, phone, applied_job_id')
     .eq('id', candidate_id)
     .eq('company_id', COMPANY_ID)
     .single()
@@ -391,10 +389,10 @@ async function processInitialOutreachTask(
   if (!candidate) throw new Error(`candidate ${candidate_id} not found`)
 
   // Nothing to reach the candidate on yet — surface this as a failed task
-  // (after retry) so it shows up for HR to add a phone/link Telegram manually,
+  // (after retry) so it shows up for HR to add a phone number manually,
   // rather than silently doing nothing.
-  const channel = candidate.telegram_chat_id ? 'telegram' : candidate.phone ? 'wa' : null
-  if (!channel) throw new Error('candidate has no phone number or linked Telegram to contact')
+  const channel = candidate.phone ? 'wa' : null
+  if (!channel) throw new Error('candidate has no phone number to contact')
 
   let jobTitle: string | null = null
   if (candidate.applied_job_id) {
@@ -460,7 +458,7 @@ async function processInterviewInviteTask(
 
   const { data: candidate } = await supabase
     .from('candidates')
-    .select('id, name, position, outlet, phone, telegram_chat_id, interview_scheduled_at')
+    .select('id, name, position, outlet, phone, interview_scheduled_at')
     .eq('id', candidate_id)
     .eq('company_id', COMPANY_ID)
     .single()
@@ -468,8 +466,8 @@ async function processInterviewInviteTask(
   if (!candidate) throw new Error(`candidate ${candidate_id} not found`)
   if (!candidate.interview_scheduled_at) throw new Error('candidate has no interview_scheduled_at set')
 
-  const channel = candidate.telegram_chat_id ? 'telegram' : candidate.phone ? 'wa' : null
-  if (!channel) throw new Error('candidate has no phone number or linked Telegram to contact')
+  const channel = candidate.phone ? 'wa' : null
+  if (!channel) throw new Error('candidate has no phone number to contact')
 
   const scheduledLabel = new Date(candidate.interview_scheduled_at).toLocaleString('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',

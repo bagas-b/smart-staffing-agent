@@ -1,5 +1,4 @@
-import { Send, MessageCircle } from 'lucide-react'
-import { TelegramBadge } from '@/components/shared/TelegramBadge'
+import { MessageCircle } from 'lucide-react'
 
 export interface Conversation {
   candidateId: string
@@ -7,16 +6,10 @@ export interface Conversation {
   position: string | null
   outlet: string | null
   phone: string | null
-  telegramLinked: boolean
   lastMessage: string
   lastMessageAt: string
   lastChannel: string
   unread: boolean
-}
-
-const CHANNEL_ICON: Record<string, typeof Send> = {
-  telegram: Send,
-  wa: MessageCircle,
 }
 
 function timeAgo(iso: string): string {
@@ -44,10 +37,9 @@ export function ChatInbox({ conversations, selectedId, onSelect }: ChatInboxProp
       </div>
       <div className="flex-1 overflow-y-auto divide-y">
         {conversations.length === 0 && (
-          <p className="p-4 text-xs text-gray-400">Belum ada percakapan. Kirim link Telegram ke kandidat untuk mulai chat.</p>
+          <p className="p-4 text-xs text-gray-400">Belum ada percakapan. Kirim pesan WhatsApp ke kandidat untuk mulai chat.</p>
         )}
         {conversations.map(c => {
-          const Icon = CHANNEL_ICON[c.lastChannel] ?? MessageCircle
           return (
             <button
               key={c.candidateId}
@@ -62,11 +54,8 @@ export function ChatInbox({ conversations, selectedId, onSelect }: ChatInboxProp
                 </p>
                 <span className="text-[10px] text-gray-400 flex-shrink-0">{timeAgo(c.lastMessageAt)}</span>
               </div>
-              {c.telegramLinked && (
-                <div className="mt-1"><TelegramBadge /></div>
-              )}
               <div className="flex items-center gap-1.5 mt-0.5">
-                <Icon size={11} className="text-gray-400 flex-shrink-0" />
+                <MessageCircle size={11} className="text-gray-400 flex-shrink-0" />
                 <p className={`text-xs truncate ${c.unread ? 'text-gray-700' : 'text-gray-400'}`}>
                   {c.lastMessage}
                 </p>

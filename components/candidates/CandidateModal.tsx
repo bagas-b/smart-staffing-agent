@@ -9,8 +9,6 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ExternalLink, RefreshCw, Phone, Mail, User, MapPin, Briefcase } from 'lucide-react'
-import { TelegramLinkStatus } from '@/components/shared/TelegramLinkStatus'
-import { TelegramBadge } from '@/components/shared/TelegramBadge'
 import { STATUS_LABELS, STATUS_COLOR } from '@/lib/candidates/status'
 import { InterviewSection } from './InterviewSection'
 
@@ -30,6 +28,7 @@ interface ScoreReasoning {
   concerns?: string[]
   recommendation?: string
   confidence?: string
+  criteria_breakdown?: Array<{ label: string; score: number; note?: string }>
 }
 
 interface Decision {
@@ -50,7 +49,6 @@ interface Candidate {
   notes?: string | null
   source?: string | null
   cv_url?: string | null
-  telegram_chat_id?: string | null
   interview_scheduled_at?: string | null
   candidate_messages?: Message[]
   candidate_decisions?: Decision[]
@@ -178,6 +176,28 @@ function ScoreSection({ candidateId }: { candidateId: string }) {
           {tierLabel}
         </span>
 
+        {/* Per-criterion breakdown — only present when the company has custom
+            Kriteria Screening configured (Settings → Kriteria Screening). */}
+        {(score.reasoning.criteria_breakdown?.length ?? 0) > 0 && (
+          <div>
+            <p className="text-[11px] font-semibold text-gray-600 mb-1">📊 Rincian per Kriteria</p>
+            <div className="space-y-1.5">
+              {score.reasoning.criteria_breakdown!.map((c, i) => (
+                <div key={i} className="text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-700">{c.label}</span>
+                    <span className="font-medium text-gray-800">{c.score}</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-0.5">
+                    <div className="h-full bg-[#1E3A2F]" style={{ width: `${Math.min(100, Math.max(0, c.score))}%` }} />
+                  </div>
+                  {c.note && <p className="text-[11px] text-gray-400 mt-0.5">{c.note}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Strengths */}
         {(score.reasoning.strengths?.length ?? 0) > 0 && (
           <div>
@@ -279,7 +299,6 @@ export function CandidateModal({ candidateId, onClose, snapshot }: CandidateModa
                     {STATUS_LABELS[status] ?? status}
                   </span>
                 )}
-                {current?.telegram_chat_id && <TelegramBadge />}
                 {position && (
                   <span className="flex items-center gap-1 text-xs text-gray-500">
                     <Briefcase size={11} /> {position}
@@ -341,11 +360,6 @@ export function CandidateModal({ candidateId, onClose, snapshot }: CandidateModa
                 </a>
               )}
             </div>
-          )}
-
-          {/* Telegram link status */}
-          {current && (
-            <TelegramLinkStatus candidateId={current.id} linked={!!current.telegram_chat_id} />
           )}
 
           {/* Applied job */}

@@ -5,19 +5,14 @@ import { ChatInbox, type Conversation } from '@/components/chat/ChatInbox'
 import { ChatThread } from '@/components/chat/ChatThread'
 
 function BotStatusPill() {
-  const [status, setStatus] = useState<'connected' | 'disconnected' | null>(null)
-  const [username, setUsername] = useState<string | null>(null)
+  const [status, setStatus] = useState<'connected' | 'qr' | 'disconnected' | null>(null)
 
   useEffect(() => {
     let cancelled = false
     function poll() {
-      fetch('/api/telegram/status')
+      fetch('/api/wa/status')
         .then(r => r.json())
-        .then(data => {
-          if (cancelled) return
-          setStatus(data.status)
-          setUsername(data.username ?? null)
-        })
+        .then(data => { if (!cancelled) setStatus(data.status) })
         .catch(() => { if (!cancelled) setStatus('disconnected') })
     }
     poll()
@@ -27,11 +22,13 @@ function BotStatusPill() {
 
   if (status === null) return null
 
+  const label = status === 'connected' ? 'WA Terhubung' : status === 'qr' ? 'Menunggu Scan QR' : 'WA Terputus'
+
   return (
     <div className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border bg-white">
       <span className={`w-1.5 h-1.5 rounded-full ${status === 'connected' ? 'bg-green-500' : 'bg-red-400'}`} />
       <Send size={11} className="text-gray-400" />
-      {status === 'connected' ? `@${username}` : 'Bot terputus'}
+      {label}
     </div>
   )
 }

@@ -3,7 +3,6 @@ import { MessageHistory } from '@/components/candidates/MessageHistory'
 import { Badge } from '@/components/ui/badge'
 import { notFound } from 'next/navigation'
 import { ScoreCard } from '@/components/candidates/ScoreCard'
-import { TelegramBadge } from '@/components/shared/TelegramBadge'
 import { STATUS_LABELS } from '@/lib/candidates/status'
 
 async function getCandidate(id: string) {
@@ -37,7 +36,6 @@ export default async function CandidateDetailPage({ params }: { params: Promise<
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline">{STATUS_LABELS[candidate.status] ?? candidate.status}</Badge>
-          {candidate.telegram_chat_id && <TelegramBadge />}
         </div>
       </div>
 

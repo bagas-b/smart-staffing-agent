@@ -29,8 +29,18 @@ async function baileysRequest(path: string, method = 'GET', body?: object) {
   }
 }
 
+// Candidate phones are stored in local Indonesian format (0813...), but
+// WhatsApp JIDs need the country-code form (62813...) — sending the raw
+// local-format number produces a JID for a nonexistent/wrong contact.
+function toWhatsAppId(phone: string): string {
+  if (phone.includes('@')) return phone // already a JID
+  const digits = phone.replace(/\D/g, '')
+  const normalized = digits.startsWith('0') ? `62${digits.slice(1)}` : digits
+  return `${normalized}@s.whatsapp.net`
+}
+
 export async function sendWA(to: string, message: string) {
-  return baileysRequest('/send', 'POST', { to, message })
+  return baileysRequest('/send', 'POST', { to: toWhatsAppId(to), message })
 }
 
 export async function getWAStatus(): Promise<{ status: 'qr' | 'connected' | 'disconnected' }> {
@@ -39,4 +49,12 @@ export async function getWAStatus(): Promise<{ status: 'qr' | 'connected' | 'dis
 
 export async function getWAQR(): Promise<{ qr: string }> {
   return baileysRequest('/qr')
+}
+
+export async function connectWA(): Promise<{ status: string }> {
+  return baileysRequest('/connect', 'POST')
+}
+
+export async function logoutWA(): Promise<{ status: string }> {
+  return baileysRequest('/logout', 'POST')
 }

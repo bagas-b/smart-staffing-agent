@@ -20,14 +20,27 @@ export async function POST(req: NextRequest) {
   const cleanPhone = (from as string).replace(/\D/g, '')
   const cleanJid = `${cleanPhone}@s.whatsapp.net`
 
+  // Stored candidate phones aren't guaranteed to be in one canonical format
+  // (+62xxx from the new "+62" input prefix, bare 62xxx, or legacy 0xxx from
+  // older CSV imports) — match against all of them instead of assuming one,
+  // otherwise an inbound reply silently fails to match and gets dropped.
+  const localFormat = cleanPhone.startsWith('62') ? `0${cleanPhone.slice(2)}` : cleanPhone
+  const phoneFilters = [cleanPhone, `+${cleanPhone}`, localFormat].map(p => `phone.eq.${p}`)
+
   const { data: candidate } = await supabase
     .from('candidates')
-    .select('id, status')
+    .select('id, status, wa_chat_id')
     .eq('company_id', COMPANY_ID)
-    .or(`wa_chat_id.eq.${cleanJid},phone.eq.${cleanPhone}`)
-    .single()
+    .or([`wa_chat_id.eq.${cleanJid}`, ...phoneFilters].join(','))
+    .maybeSingle()
 
   if (!candidate) return NextResponse.json({ ok: true })
+
+  // Backfill wa_chat_id on first successful match so future lookups for this
+  // candidate go through the exact chat-id match, not phone-format guessing.
+  if (!candidate.wa_chat_id) {
+    await supabase.from('candidates').update({ wa_chat_id: cleanJid }).eq('id', candidate.id)
+  }
 
   await supabase.from('candidate_messages').insert({
     candidate_id: candidate.id,

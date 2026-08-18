@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/follow-up",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/agent/run",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

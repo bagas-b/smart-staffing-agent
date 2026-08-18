@@ -7,7 +7,6 @@ interface MessageBubbleProps {
 
 const CHANNEL_LABEL: Record<string, string> = {
   wa: 'WA',
-  telegram: 'Telegram',
   email: 'Email',
 }
 

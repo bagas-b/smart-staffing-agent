@@ -2,10 +2,18 @@ import makeWASocket, { DisconnectReason, useMultiFileAuthState } from '@whiskeys
 import express from 'express'
 import QRCode from 'qrcode'
 import pino from 'pino'
+import NodeCache from 'node-cache'
+import fs from 'fs/promises'
 
 const logger = pino({ level: 'silent' })
 const app = express()
 app.use(express.json())
+
+// Without this, the socket can't answer WhatsApp's automatic retry-receipt
+// handshake when a message fails to decrypt (Signal session desync — shows up
+// as "Bad MAC" in logs) — every message after the first one just silently
+// fails instead of WA re-sending it with fresh keys.
+const msgRetryCounterCache = new NodeCache()
 
 const SECRET = process.env.BAILEYS_SECRET ?? ''
 const CALLBACK_URL = process.env.NEXT_APP_CALLBACK_URL ?? ''
@@ -21,10 +29,13 @@ app.use((req, res, next) => {
 let sock = null
 let currentQR = null
 let connectionStatus = 'disconnected'
+let starting = false
 
 async function startSocket() {
+  if (starting) return // avoid overlapping sockets if /connect races the auto-reconnect timer
+  starting = true
   const { state, saveCreds } = await useMultiFileAuthState('./auth_info')
-  sock = makeWASocket({ auth: state, logger, printQRInTerminal: false })
+  sock = makeWASocket({ auth: state, logger, printQRInTerminal: false, msgRetryCounterCache })
 
   sock.ev.on('creds.update', saveCreds)
 
@@ -36,9 +47,11 @@ async function startSocket() {
     if (connection === 'open') {
       connectionStatus = 'connected'
       currentQR = null
+      starting = false
     }
     if (connection === 'close') {
       connectionStatus = 'disconnected'
+      starting = false
       const code = lastDisconnect?.error?.output?.statusCode
       if (code !== DisconnectReason.loggedOut) setTimeout(startSocket, 3000)
     }
@@ -85,6 +98,29 @@ app.get('/status', (_req, res) => res.json({ status: connectionStatus }))
 app.get('/qr', (_req, res) => {
   if (!currentQR) return res.status(404).json({ error: 'no QR available' })
   res.json({ qr: currentQR })
+})
+
+// HR-triggered (re)connect from the app's Settings page — no more manually
+// SSH-ing in to restart the process just to get a fresh QR.
+app.post('/connect', async (_req, res) => {
+  if (connectionStatus === 'disconnected') startSocket().catch(console.error)
+  res.json({ status: connectionStatus === 'disconnected' ? 'connecting' : connectionStatus })
+})
+
+app.post('/logout', async (_req, res) => {
+  try {
+    await sock?.logout().catch(() => {})
+  } finally {
+    sock = null
+    currentQR = null
+    connectionStatus = 'disconnected'
+    starting = false
+    await fs.rm('./auth_info', { recursive: true, force: true }).catch(() => {})
+    // Immediately start a fresh session so a new QR is ready without a
+    // separate /connect call.
+    startSocket().catch(console.error)
+  }
+  res.json({ status: 'ok' })
 })
 
 startSocket()

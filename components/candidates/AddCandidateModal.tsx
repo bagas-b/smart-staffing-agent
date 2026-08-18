@@ -32,6 +32,7 @@ export function AddCandidateModal({ open, onClose, onCreated }: AddCandidateModa
   const [outlet, setOutlet] = useState('')
   const [appliedJobId, setAppliedJobId] = useState('')
   const [notes, setNotes] = useState('')
+  const [cvFile, setCvFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -45,7 +46,7 @@ export function AddCandidateModal({ open, onClose, onCreated }: AddCandidateModa
 
   function reset() {
     setName(''); setPhone(''); setEmail(''); setPosition(''); setOutlet('')
-    setAppliedJobId(''); setNotes(''); setError('')
+    setAppliedJobId(''); setNotes(''); setCvFile(null); setError('')
   }
 
   function handleJobSelect(jobId: string) {
@@ -63,20 +64,22 @@ export function AddCandidateModal({ open, onClose, onCreated }: AddCandidateModa
     setSaving(true)
     setError('')
     try {
-      const res = await fetch('/api/candidates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          phone: phone.trim() || null,
-          email: email.trim() || null,
-          position: position.trim() || null,
-          outlet: outlet.trim() || null,
-          notes: notes.trim() || null,
-          source: 'external_form',
-          applied_job_id: appliedJobId || null,
-        }),
-      })
+      const fd = new FormData()
+      fd.append('name', name.trim())
+      // `phone` only ever holds the digits after +62 (see the fixed-prefix
+      // input below) — store the full number in one consistent format so
+      // inbound WA webhook matching doesn't have to guess between
+      // +62/62/0-prefixed variants.
+      if (phone.trim()) fd.append('phone', `+62${phone.trim()}`)
+      if (email.trim()) fd.append('email', email.trim())
+      if (position.trim()) fd.append('position', position.trim())
+      if (outlet.trim()) fd.append('outlet', outlet.trim())
+      if (notes.trim()) fd.append('notes', notes.trim())
+      fd.append('source', 'external_form')
+      if (appliedJobId) fd.append('applied_job_id', appliedJobId)
+      if (cvFile) fd.append('cv', cvFile)
+
+      const res = await fetch('/api/candidates', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Gagal menambah kandidat')
       reset()
@@ -118,7 +121,19 @@ export function AddCandidateModal({ open, onClose, onCreated }: AddCandidateModa
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="ac-phone">Nomor WA</Label>
-              <Input id="ac-phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="08xxxxxxxxxx" />
+              <div className="flex items-center rounded-lg border border-input focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 overflow-hidden">
+                <span className="pl-2.5 pr-1.5 text-sm text-gray-500 select-none">+62</span>
+                <input
+                  id="ac-phone"
+                  value={phone}
+                  // Strip everything but digits, and drop a leading 0 in case HR
+                  // pastes a local-format number (0812...) after the +62 prefix.
+                  onChange={e => setPhone(e.target.value.replace(/\D/g, '').replace(/^0+/, ''))}
+                  placeholder="812xxxxxxxx"
+                  inputMode="numeric"
+                  className="flex-1 h-8 pr-2.5 text-sm outline-none bg-transparent"
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ac-email">Email</Label>
@@ -153,6 +168,22 @@ export function AddCandidateModal({ open, onClose, onCreated }: AddCandidateModa
           </div>
 
           <div className="space-y-1.5">
+            <Label htmlFor="ac-cv">CV (PDF)</Label>
+            <input
+              id="ac-cv"
+              type="file"
+              accept="application/pdf"
+              onChange={e => setCvFile(e.target.files?.[0] ?? null)}
+              className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 cursor-pointer"
+            />
+            {cvFile && (
+              <p className="text-[11px] text-gray-400">
+                {cvFile.name} ({(cvFile.size / 1024).toFixed(0)} KB)
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
             <Label htmlFor="ac-notes">Catatan</Label>
             <textarea
               id="ac-notes"
@@ -165,7 +196,7 @@ export function AddCandidateModal({ open, onClose, onCreated }: AddCandidateModa
           </div>
 
           <p className="text-[11px] text-gray-400">
-            Kandidat langsung di-score oleh AI. Kalau nomor WA diisi, agent juga akan siapkan draft pesan pembuka untuk direview di Approval.
+            Kandidat langsung di-score oleh AI — kalau CV dilampirkan, AI membaca isinya langsung untuk penilaian yang lebih akurat. Kalau nomor WA diisi, agent juga akan siapkan draft pesan pembuka untuk direview di Approval.
           </p>
 
           <div className="flex gap-2 pt-1">

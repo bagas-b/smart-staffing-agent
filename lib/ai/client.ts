@@ -1,4 +1,8 @@
-type Message = { role: 'user' | 'assistant'; content: string }
+type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+
+type Message = { role: 'user' | 'assistant'; content: string | ContentBlock[] }
 
 export async function callClaude(
   messages: Message[],

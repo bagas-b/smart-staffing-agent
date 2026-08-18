@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
     .eq('id', id)
     .eq('company_id', COMPANY_ID)
-    .select('name, position, outlet, phone, telegram_chat_id')
+    .select('name, position, outlet, phone')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -39,13 +39,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Draft the invitation right here, synchronously, instead of queueing a
   // background agent_task — HR is waiting on this screen for the draft to
   // review and send, not checking back on the Approval page later.
-  const channel = candidate.telegram_chat_id ? 'telegram' : candidate.phone ? 'wa' : null
+  const channel = candidate.phone ? 'wa' : null
   if (!channel) {
     // Schedule was still saved — just nothing to draft a message onto.
     return NextResponse.json({
       success: true,
       draft: null,
-      warning: 'Jadwal tersimpan, tapi kandidat belum punya nomor WA atau Telegram terhubung — tidak ada draft undangan yang dibuat.',
+      warning: 'Jadwal tersimpan, tapi kandidat belum punya nomor WA — tidak ada draft undangan yang dibuat.',
     })
   }
 

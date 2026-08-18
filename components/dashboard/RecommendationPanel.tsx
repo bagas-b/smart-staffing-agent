@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Send, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { TelegramBadge } from '@/components/shared/TelegramBadge'
 import { CandidateModal } from '@/components/candidates/CandidateModal'
 import { STATUS_LABELS, STATUS_COLOR } from '@/lib/candidates/status'
 
@@ -21,7 +20,6 @@ export type ScoredCandidate = {
     name: string
     position: string | null
     outlet: string | null
-    telegram_chat_id: string | null
     status: string | null
   } | null
 }
@@ -140,7 +138,6 @@ export function RecommendationPanel({ candidates }: { candidates: ScoredCandidat
                   <span className="text-sm font-medium text-gray-800">{c.candidates?.name}</span>
                   <TierBadge prob={c.hire_success_probability} confidence={reasoning?.confidence} />
                   <StatusBadge status={c.candidates?.status ?? null} />
-                  {c.candidates?.telegram_chat_id && <TelegramBadge />}
                 </div>
                 <p className="text-xs text-gray-500">
                   {c.candidates?.position ?? '-'} · {c.candidates?.outlet ?? '-'} · Skor: {c.hire_success_probability}

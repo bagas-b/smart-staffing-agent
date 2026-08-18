@@ -97,7 +97,7 @@ function ScheduleForm({ candidateId, onScheduled }: { candidateId: string; onSch
         {draft && (
           <>
             <div className="rounded-lg border bg-white p-2.5">
-              <p className="text-[10px] text-gray-400 mb-1">Draft undangan ({draft.channel === 'telegram' ? 'Telegram' : 'WA'}) — bisa diedit dulu di halaman Approval kalau perlu:</p>
+              <p className="text-[10px] text-gray-400 mb-1">Draft undangan (WA) — bisa diedit dulu di halaman Approval kalau perlu:</p>
               <p className="text-xs text-gray-700 whitespace-pre-wrap">{draft.content}</p>
             </div>
             {sendError && <p className="text-xs text-red-600">{sendError}</p>}
